@@ -28,8 +28,11 @@
   <!-- 2. Racconta -->
   <section id="schermo-racconta" class="schermo" aria-label="Racconta">
     <button id="btn-microfono" class="btn btn-principale btn-microfono" type="button">
-      <span class="microfono-icona" aria-hidden="true">🎤</span>
+      <svg class="icona icona-microfono" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 15a4 4 0 0 0 4-4V6a4 4 0 0 0-8 0v5a4 4 0 0 0 4 4zm6-4a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.93V22h2v-3.07A8 8 0 0 0 20 11h-2z"/>
+      </svg>
       <span id="microfono-testo">Tocca per parlare</span>
+      <span id="microfono-sotto" class="microfono-sotto" hidden></span>
     </button>
     <button id="aiuto-tastiera" class="aiuto" type="button" hidden>Tocca il microfono 🎤 sulla tastiera e parla</button>
     <textarea id="testo" aria-label="Testo della nota" lang="it" autocapitalize="sentences" autocomplete="off"
@@ -52,7 +55,10 @@
 
   <!-- 4. Conferma -->
   <section id="schermo-conferma" class="schermo schermo-conferma" role="status" aria-label="Nota salvata">
-    <div class="conferma-spunta" aria-hidden="true">✓</div>
+    <svg class="conferma-spunta" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="11" fill="none" stroke="currentColor" stroke-width="1.4"/>
+      <path d="M6.5 12.5l3.5 3.5 7.5-8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
     <p class="conferma-titolo">Nota salvata</p>
     <p id="conferma-cantiere" class="conferma-riga"></p>
     <p id="conferma-attesa" class="conferma-riga" hidden>Verrà inviata appena c'è campo</p>
@@ -67,6 +73,7 @@
 
   <script src="config.js"></script>
   <script src="db.js"></script>
+  <script src="speech.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -8,6 +8,7 @@
   var CHIAVE_BOZZA = 'diario-cantieri:bozza';
   var MILLISECONDI_CONFERMA = 3000;
   var MILLISECONDI_ANTI_DOPPIO_TOCCO = 400;
+  var MILLISECONDI_AVVISO_MICROFONO = 2500;
 
   // Cantieri finti, usati solo in modalità prova (CONFIG.URL_WEB_APP vuoto).
   var CANTIERI_FINTI = [
@@ -28,6 +29,8 @@
     versione: $('versione'),
     racconta: $('schermo-racconta'),
     microfono: $('btn-microfono'),
+    microfonoTesto: $('microfono-testo'),
+    microfonoSotto: $('microfono-sotto'),
     aiuto: $('aiuto-tastiera'),
     testo: $('testo'),
     annulla: $('btn-annulla'),
@@ -49,7 +52,9 @@
     ignoraPop: false,
     dopoPop: null,
     salvataggio: false,
-    timerConferma: null
+    timerConferma: null,
+    timerMicrofono: null,
+    erroriPermesso: 0
   };
 
   // ---- Utilità ----
@@ -145,6 +150,7 @@
       mostra('racconta');
       mettiGuardia();
     } else if (stato.schermo === 'racconta') {
+      fermaDettatura();
       if (el.testo.value.trim()) {
         el.testo.blur();
         mostra('butta');
@@ -194,6 +200,7 @@
     aggiornaAvanti();
     el.racconta.classList.remove('con-tastiera');
     el.aiuto.hidden = true;
+    impostaMicrofono('pronto');
     mostra('racconta');
     mettiGuardia();
   }
@@ -209,6 +216,7 @@
   }
 
   function chiudiRacconta() {
+    fermaDettatura();
     cancellaBozza();
     el.testo.value = '';
     el.testo.blur();
@@ -219,12 +227,102 @@
 
   function annulla() {
     vibra();
+    fermaDettatura();
     if (el.testo.value.trim()) {
       // C'è del testo: prima di buttarlo via si chiede conferma.
       el.testo.blur();
       mostra('butta');
     } else {
       chiudiRacconta();
+    }
+  }
+
+  // ---- Dettatura ----
+
+  // Etichette del pulsante microfono nei vari momenti.
+  function impostaMicrofono(fase) {
+    clearTimeout(stato.timerMicrofono);
+    el.microfono.classList.toggle('ascolto', fase === 'ascolto');
+    el.microfonoSotto.hidden = fase !== 'ascolto';
+    if (fase === 'ascolto') {
+      el.microfonoTesto.textContent = 'Sto ascoltando…';
+      el.microfonoSotto.textContent = 'tocca per fermare';
+    } else if (fase === 'chiusura') {
+      el.microfonoTesto.textContent = 'Un attimo…';
+    } else if (fase === 'niente') {
+      el.microfonoTesto.textContent = 'Non ho sentito niente';
+      stato.timerMicrofono = setTimeout(function () { impostaMicrofono('pronto'); }, MILLISECONDI_AVVISO_MICROFONO);
+    } else {
+      el.microfonoTesto.textContent = 'Tocca per parlare';
+    }
+  }
+
+  function maiuscola(testo) { return testo.charAt(0).toUpperCase() + testo.slice(1); }
+
+  // Accoda il testo dettato a quello già presente, con lo spazio e la maiuscola giusti.
+  function unisci(base, aggiunta) {
+    if (!aggiunta) return base;
+    var prima = base.replace(/\s+$/, '');
+    if (!prima) return maiuscola(aggiunta);
+    if (/[.!?]$/.test(prima)) return prima + ' ' + maiuscola(aggiunta);
+    return prima + ' ' + aggiunta;
+  }
+
+  function scorriInFondo() { el.testo.scrollTop = el.testo.scrollHeight; }
+
+  function completaDettatura(base, testo) {
+    el.testo.value = unisci(base, testo);
+    salvaBozza(el.testo.value);
+    aggiornaAvanti();
+    scorriInFondo();
+  }
+
+  // Interrompe l'ascolto quando si lascia la schermata; il testo già comparso resta.
+  function fermaDettatura() {
+    if (Dettatura.inAscolto()) Dettatura.annulla();
+    impostaMicrofono('pronto');
+  }
+
+  function toccaMicrofono() {
+    vibra();
+    if (Dettatura.inAscolto()) {
+      // Secondo tocco: si ferma e si aspetta il risultato finale.
+      impostaMicrofono('chiusura');
+      Dettatura.ferma();
+      return;
+    }
+    // Senza API, senza rete o senza permesso si passa subito alla tastiera:
+    // farlo dentro il tocco è l'unico modo per far aprire la tastiera da sola.
+    if (!Dettatura.disponibile() || stato.erroriPermesso >= 2 || !navigator.onLine) {
+      usaTastiera();
+      return;
+    }
+    var base = el.testo.value;
+    var partito = Dettatura.avvia({
+      alTesto: function (testo) {
+        el.testo.value = unisci(base, testo);
+        aggiornaAvanti();
+        scorriInFondo();
+      },
+      allaFine: function (testo) {
+        completaDettatura(base, testo);
+        impostaMicrofono('pronto');
+      },
+      allErrore: function (codice, testo) {
+        completaDettatura(base, testo);
+        if (codice === 'no-speech') { impostaMicrofono('niente'); return; }
+        // "not-allowed" arriva sia col permesso negato sia col microfono occupato:
+        // si rinuncia all'ascolto in-app solo se succede due volte di fila.
+        if (codice === 'not-allowed' || codice === 'service-not-allowed') stato.erroriPermesso++;
+        impostaMicrofono('pronto');
+        usaTastiera();
+      }
+    });
+    if (partito) {
+      stato.erroriPermesso = 0;
+      impostaMicrofono('ascolto');
+    } else {
+      usaTastiera();
     }
   }
 
@@ -246,7 +344,7 @@
     ordinati.forEach(function (cantiere) {
       var pulsante = document.createElement('button');
       pulsante.type = 'button';
-      pulsante.className = 'btn btn-principale btn-cantiere';
+      pulsante.className = 'btn btn-cantiere';
       pulsante.textContent = cantiere.nome;
       pulsante.addEventListener('click', function () { scegliCantiere(cantiere.nome); });
       el.elenco.appendChild(pulsante);
@@ -256,6 +354,7 @@
   function apriCantieri() {
     if (!el.testo.value.trim()) return;
     vibra();
+    fermaDettatura();
     el.testo.blur();
     el.avviso.hidden = true;
     Promise.all([
@@ -325,7 +424,7 @@
   // ---- Collegamenti ----
 
   el.nuova.addEventListener('click', apriRacconta);
-  el.microfono.addEventListener('click', function () { vibra(); usaTastiera(); });
+  el.microfono.addEventListener('click', toccaMicrofono);
   el.aiuto.addEventListener('click', usaTastiera);
   el.testo.addEventListener('input', function () { salvaBozza(el.testo.value); aggiornaAvanti(); });
   el.annulla.addEventListener('click', annulla);

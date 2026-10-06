@@ -1,19 +1,21 @@
 /* Diario Cantieri — aspetto.
    Regole: testo grande, pulsanti alti, contrasto forte per leggere al sole.
+   Stile sobrio, da strumento di lavoro: bordi sottili, angoli poco arrotondati, niente decorazioni.
    Sfondo chiaro e testo scuro: al sole si legge meglio del contrario. */
 
 :root {
   color-scheme: only light;
-  --sfondo: #FFFFFF;
   /* Rapporti di contrasto calcolati (WCAG AAA = almeno 7:1). */
+  --sfondo: #FFFFFF;
   --testo: #111111;        /* su bianco 18,9:1 */
   --giallo: #FFD500;       /* testo scuro su giallo 13,3:1 */
   --rosso: #A80000;        /* testo bianco su rosso 7,9:1 */
   --verde: #0B5D1E;        /* testo bianco su verde 8,1:1 */
   --grigio: #595959;       /* su bianco 7,0:1 */
-  --bordo: 4px;
-  --raggio: 18px;
-  --spazio: 16px;
+  --linea: #C9C9C9;        /* solo per righe di separazione, mai per il testo */
+  --raggio: 10px;
+  --spazio: 12px;
+  --ombra: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 * { box-sizing: border-box; }
@@ -22,7 +24,7 @@
 [hidden] { display: none !important; }
 
 html {
-  font-size: 22px;
+  font-size: 21px;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -38,7 +40,9 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ---- Schermate: se ne vede una alla volta, a tutto schermo ---- */
+/* ---- Schermate: una alla volta, alte esattamente quanto lo schermo.
+        Le parti flessibili si adattano, così la pagina non deve scorrere:
+        scorrono solo l'elenco dei cantieri e l'area di testo. ---- */
 
 .schermo {
   display: none;
@@ -55,9 +59,9 @@ body {
 
 .titolo {
   margin: 0;
-  font-size: 1.6rem;
-  font-weight: 800;
-  line-height: 1.15;
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .titolo-centrato { text-align: center; padding: var(--spazio) 0; }
@@ -70,18 +74,20 @@ body {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   width: 100%;
-  min-height: 84px;
+  min-height: 80px;
   margin: 0;
-  padding: 12px 16px;
-  border: var(--bordo) solid var(--testo);
+  padding: 10px 16px;
+  border: 2px solid var(--testo);
   border-radius: var(--raggio);
   background: var(--sfondo);
   color: var(--testo);
+  box-shadow: var(--ombra);
   font: inherit;
-  font-size: 1.45rem;
-  font-weight: 800;
-  line-height: 1.15;
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.2;
   text-align: center;
   cursor: pointer;
   touch-action: manipulation;
@@ -94,28 +100,31 @@ body {
 .btn-scuro { background: var(--testo); color: #FFFFFF; }
 
 /* Risposta visibile al tocco: su un telefono non c'è il passaggio del mouse. */
-.btn:active { transform: scale(0.97); filter: brightness(0.85); }
+.btn:active { transform: translateY(1px); box-shadow: none; filter: brightness(0.9); }
 
 .btn:disabled {
-  border: 3px dashed var(--grigio);
-  background: var(--sfondo);
+  border-color: var(--linea);
+  background: #F4F4F4;
   color: var(--grigio);
+  box-shadow: none;
   transform: none;
   filter: none;
   cursor: default;
 }
 
 .btn:focus-visible, textarea:focus-visible {
-  outline: 4px solid #0B3D91;
-  outline-offset: 3px;
+  outline: 3px solid #0B3D91;
+  outline-offset: 2px;
 }
 
 .btn-gigante {
-  flex: 1 0 auto;
-  min-height: 55vh;
-  min-height: 55dvh;
-  font-size: 2.3rem;
+  flex: 1 1 auto;
+  min-height: 50vh;
+  min-height: 50dvh;
+  font-size: 1.9rem;
 }
+
+.icona { width: 1em; height: 1em; fill: currentColor; }
 
 /* ---- 1. Schermata iniziale ---- */
 
@@ -125,38 +134,40 @@ body {
   font-size: 1rem;
 }
 
-.stato-attesa { font-weight: 800; }
+.stato-attesa { font-weight: 700; }
+
+.ultime {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 8px;
+  border-top: 1px solid var(--linea);
+}
 
 .ultime h2 {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   font-size: 0.95rem;
-  font-weight: 800;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--grigio);
 }
 
-.ultime ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+.ultime ul { margin: 0; padding: 0; list-style: none; }
 
+/* Una riga per nota: ora e cantiere, poi l'inizio del testo. */
 .ultime li {
   display: flex;
-  flex-direction: column;
-  font-size: 0.95rem;
-  line-height: 1.25;
-}
-
-.ultima-capo { font-weight: 800; }
-
-.ultima-capo, .ultima-testo {
+  gap: 8px;
   overflow: hidden;
+  font-size: 0.95rem;
+  line-height: 1.5;
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
+
+.ultima-capo { flex: 0 0 auto; font-weight: 700; }
+
+.ultima-testo { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; color: var(--grigio); }
 
 .versione {
   margin: 0;
@@ -168,25 +179,31 @@ body {
 /* ---- 2. Racconta ---- */
 
 .btn-microfono {
+  flex: 0 1 auto;
   flex-direction: column;
-  gap: 4px;
-  height: clamp(120px, 28dvh, 260px);
-  font-size: 1.6rem;
+  gap: 2px;
+  min-height: 96px;
+  height: clamp(96px, 24dvh, 210px);
+  padding: 8px 16px;
+  font-size: 1.35rem;
 }
 
-.microfono-icona { font-size: 2.6rem; line-height: 1; }
+.icona-microfono { width: 1.9rem; height: 1.9rem; }
 
-/* Mentre ascolta: colore pieno e pulsazione, si deve capire a colpo d'occhio. */
+.microfono-sotto { font-size: 0.95rem; font-weight: 500; }
+
+/* Mentre ascolta: colore pieno, si deve capire a colpo d'occhio. */
 .btn-microfono.ascolto {
   border-color: var(--rosso);
   background: var(--rosso);
   color: #FFFFFF;
-  animation: pulsa 1.2s ease-in-out infinite;
 }
 
-@keyframes pulsa {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(168, 0, 0, 0.55); }
-  50% { box-shadow: 0 0 0 14px rgba(168, 0, 0, 0); }
+.btn-microfono.ascolto .icona-microfono { animation: lampeggia 1s ease-in-out infinite; }
+
+@keyframes lampeggia {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
 /* Con la tastiera aperta lo spazio è poco: il pulsante grande lascia il posto all'aiuto. */
@@ -196,17 +213,17 @@ body {
   appearance: none;
   flex: 0 0 auto;
   width: 100%;
-  min-height: 64px;
+  min-height: 60px;
   margin: 0;
-  padding: 12px 14px;
+  padding: 10px 14px;
   border: 0;
   border-radius: var(--raggio);
   background: var(--testo);
   color: #FFFFFF;
   font: inherit;
-  font-size: 1.25rem;
-  font-weight: 800;
-  line-height: 1.2;
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.25;
   text-align: center;
   touch-action: manipulation;
 }
@@ -214,15 +231,15 @@ body {
 #testo {
   flex: 1 1 auto;
   width: 100%;
-  min-height: 110px;
+  min-height: 90px;
   margin: 0;
-  padding: 14px;
-  border: var(--bordo) solid var(--testo);
+  padding: 12px;
+  border: 2px solid var(--testo);
   border-radius: var(--raggio);
   background: #FFFFFF;
   color: var(--testo);
   font: inherit;
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   line-height: 1.35;
   resize: none;
 }
@@ -232,11 +249,11 @@ body {
 .barra {
   display: flex;
   flex: 0 0 auto;
-  gap: 12px;
+  gap: 10px;
 }
 
 /* "Annulla" è secondario: più stretto e a sinistra, lontano dal pollice destro. */
-.btn-annulla { flex: 0 0 36%; width: auto; font-size: 1.15rem; }
+.btn-annulla { flex: 0 0 36%; width: auto; min-height: 64px; font-size: 1.1rem; }
 
 .barra .btn-principale { flex: 1 1 auto; width: auto; }
 
@@ -246,27 +263,36 @@ body {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   min-height: 0;
+  padding-bottom: 4px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
+/* I cantieri sono scelte alla pari: bianchi, con una barra gialla come segno. */
+.btn-cantiere {
+  justify-content: flex-start;
+  padding-left: 18px;
+  border-left: 8px solid var(--giallo);
+  text-align: left;
+}
+
 .avviso {
   margin: 0;
-  padding: 12px 14px;
+  padding: 10px 14px;
   border-radius: var(--raggio);
   background: var(--rosso);
   color: #FFFFFF;
-  font-size: 1.15rem;
-  font-weight: 800;
+  font-size: 1.1rem;
+  font-weight: 700;
 }
 
 /* "Non so / Generale" resta fisso in basso, sempre visibile. */
 .piede {
   flex: 0 0 auto;
-  padding-top: 12px;
-  border-top: 3px solid var(--testo);
+  padding-top: 10px;
+  border-top: 1px solid var(--linea);
 }
 
 /* ---- 4. Conferma ---- */
@@ -274,18 +300,18 @@ body {
 .schermo-conferma {
   align-items: center;
   justify-content: center;
+  gap: 8px;
   background: var(--verde);
   color: #FFFFFF;
   text-align: center;
 }
 
-.conferma-spunta { font-size: 7rem; font-weight: 800; line-height: 1; }
+.conferma-spunta { width: 6rem; height: 6rem; margin-bottom: 8px; }
 
-.conferma-titolo { margin: 0; font-size: 2.4rem; font-weight: 800; line-height: 1.1; }
+.conferma-titolo { margin: 0; font-size: 2rem; font-weight: 700; line-height: 1.1; }
 
-.conferma-riga { margin: 0; font-size: 1.3rem; font-weight: 700; }
+.conferma-riga { margin: 0; font-size: 1.15rem; font-weight: 500; }
 
 @media (prefers-reduced-motion: reduce) {
-  .btn-microfono.ascolto { animation: none; }
-  .btn:active { transform: none; }
+  .btn-microfono.ascolto .icona-microfono { animation: none; }
 }

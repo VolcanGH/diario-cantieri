@@ -434,6 +434,22 @@
   el.buttaNo.addEventListener('click', function () { vibra(); mostra('racconta'); });
   el.buttaSi.addEventListener('click', function () { vibra(); chiudiRacconta(); });
 
+  // Tastiera del telefono: Chrome su Android dice quanto è alta (API VirtualKeyboard).
+  // La schermata si accorcia di quel tanto (vedi stile.css) e il pulsante microfono
+  // sparisce finché la tastiera è aperta. Dove l'API manca, ci si basa sul focus del testo.
+  if (navigator.virtualKeyboard) {
+    try {
+      navigator.virtualKeyboard.overlaysContent = true;
+      navigator.virtualKeyboard.addEventListener('geometrychange', function (evento) {
+        var aperta = evento.target.boundingRect.height > 0;
+        el.racconta.classList.toggle('tastiera-aperta', aperta);
+      });
+    } catch (e) { /* API non disponibile */ }
+  } else {
+    el.testo.addEventListener('focus', function () { el.racconta.classList.add('tastiera-aperta'); });
+    el.testo.addEventListener('blur', function () { el.racconta.classList.remove('tastiera-aperta'); });
+  }
+
   // La coda riparte al ritorno della rete e quando l'app torna in primo piano.
   Coda.alCambio = function () { if (stato.schermo === 'home') aggiornaHome(); };
   window.addEventListener('online', function () { Coda.invia(); });

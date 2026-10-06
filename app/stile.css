@@ -51,8 +51,11 @@ body {
   height: 100vh;
   height: 100dvh;
   overflow-y: auto;
-  padding: calc(var(--spazio) + env(safe-area-inset-top)) calc(var(--spazio) + env(safe-area-inset-right))
-           calc(var(--spazio) + env(safe-area-inset-bottom)) calc(var(--spazio) + env(safe-area-inset-left));
+  padding: calc(var(--spazio) + env(safe-area-inset-top, 0px)) calc(var(--spazio) + env(safe-area-inset-right, 0px))
+           calc(var(--spazio) + env(safe-area-inset-bottom, 0px)) calc(var(--spazio) + env(safe-area-inset-left, 0px));
+  /* Con la tastiera aperta la schermata si accorcia di quanto è alta la tastiera
+     (Chrome su Android lo comunica), così i pulsanti in basso restano sopra. */
+  padding-bottom: calc(var(--spazio) + env(safe-area-inset-bottom, 0px) + env(keyboard-inset-height, 0px));
 }
 
 .schermo.attivo { display: flex; }
@@ -206,8 +209,10 @@ body {
   50% { opacity: 0.35; }
 }
 
-/* Con la tastiera aperta lo spazio è poco: il pulsante grande lascia il posto all'aiuto. */
-.con-tastiera .btn-microfono { display: none; }
+/* Con la tastiera aperta lo spazio è poco: il pulsante grande sparisce
+   (e nel ripiego lascia il posto all'aiuto). Ricompare quando la tastiera si chiude. */
+.con-tastiera .btn-microfono,
+.tastiera-aperta .btn-microfono { display: none; }
 
 .aiuto {
   appearance: none;
@@ -228,10 +233,14 @@ body {
   touch-action: manipulation;
 }
 
+/* L'area di testo non riempie tutto lo schermo: cresce fino a un terzo abbondante
+   e poi scorre al suo interno, così i pulsanti restano sempre in vista. */
 #testo {
   flex: 1 1 auto;
   width: 100%;
-  min-height: 90px;
+  min-height: 5.5em;
+  max-height: 38vh;
+  max-height: 38dvh;
   margin: 0;
   padding: 12px;
   border: 2px solid var(--testo);

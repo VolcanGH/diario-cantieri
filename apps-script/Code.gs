@@ -198,7 +198,7 @@ function preparaFoglio() {
 
   var config = assicuraFoglio(ss, NOME_CONFIG);
   assicuraConfig(config, 'correzione_attiva', false, 'Correzione automatica del testo: spunta per attivarla (serve il codice della tappa 6)');
-  assicuraConfig(config, 'url_app', '', 'Indirizzo dell\'app sul telefono: serve per creare i link degli operatori');
+  assicuraConfig(config, 'url_app', 'https://volcangh.github.io/diario-cantieri/app/', 'Indirizzo dell\'app sul telefono: serve per creare i link degli operatori');
   config.setColumnWidth(1, 180);
   config.setColumnWidth(2, 420);
   config.setColumnWidth(3, 520);

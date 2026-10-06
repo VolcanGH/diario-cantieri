@@ -5,3 +5,6 @@ node_modules/
 *.log
 Thumbs.db
 desktop.ini
+
+# Collegamento locale di clasp allo script (contiene gli id del foglio): resta sul PC
+.clasp.json

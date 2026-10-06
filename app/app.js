@@ -164,10 +164,19 @@
   // ---- Schermata iniziale ----
 
   function aggiornaHome() {
-    Archivio.contaInAttesa().then(function (n) {
-      el.statoInvio.textContent = n === 0 ? 'Tutto inviato ✓'
-        : (n === 1 ? '1 nota in attesa di rete' : n + ' note in attesa di rete');
-      el.statoInvio.classList.toggle('stato-attesa', n > 0);
+    Promise.all([Archivio.contaInAttesa(), Archivio.leggi('problemaCodice')]).then(function (dati) {
+      var n = dati[0];
+      var problemaCodice = dati[1] === true;
+      var testo;
+      if (problemaCodice) {
+        // L'ufficio non riconosce il codice del telefono: le note restano qui finché non si risolve.
+        testo = n > 0 ? 'Note salvate sul telefono. Per farle partire chiama l\'ufficio.'
+          : 'Il telefono non è riconosciuto. Chiama l\'ufficio.';
+      } else {
+        testo = n === 0 ? 'Tutto inviato ✓' : (n === 1 ? '1 nota in attesa di rete' : n + ' note in attesa di rete');
+      }
+      el.statoInvio.textContent = testo;
+      el.statoInvio.classList.toggle('stato-attesa', n > 0 || problemaCodice);
     }).catch(function () { /* la schermata resta com'era */ });
 
     Archivio.ultimeInviate(3).then(function (note) {
@@ -329,8 +338,9 @@
   // ---- Schermata "Quale cantiere?" ----
 
   function elencoCantieri() {
-    // In modalità prova l'elenco è finto; con il backend arriverà dal foglio dell'ufficio.
-    return Promise.resolve(CANTIERI_FINTI);
+    // In modalità prova l'elenco è finto; altrimenti è l'ultimo scaricato dal foglio dell'ufficio.
+    if (Coda.inProva()) return Promise.resolve(CANTIERI_FINTI);
+    return Archivio.leggi('cantieri').then(function (lista) { return lista || []; });
   }
 
   function disegnaCantieri(nomi, uso) {
@@ -451,15 +461,44 @@
   }
 
   // La coda riparte al ritorno della rete e quando l'app torna in primo piano.
-  Coda.alCambio = function () { if (stato.schermo === 'home') aggiornaHome(); };
+  // Si aggiorna sempre, anche se la schermata iniziale non è in vista: costa niente
+  // e così è già giusta quando ci si torna.
+  Coda.alCambio = aggiornaHome;
   window.addEventListener('online', function () { Coda.invia(); });
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) return;
     Coda.invia();
+    Coda.scaricaCantieri();
     if (stato.schermo === 'home') aggiornaHome();
   });
 
+  // ---- Avvio ----
+
+  // Il codice dell'operatore arriva una volta sola, dal link personale (…/?c=CODICE):
+  // viene salvato sul telefono e tolto subito dall'indirizzo.
+  function codiceDalLink() {
+    var trovato = /[?&]c=([^&#]+)/.exec(location.search);
+    if (!trovato) return Promise.resolve();
+    var codice = decodeURIComponent(trovato[1]).trim();
+    try { history.replaceState(null, '', location.pathname); } catch (e) { /* non indispensabile */ }
+    if (!codice) return Promise.resolve();
+    return Archivio.scrivi('codiceOperatore', codice)
+      .then(function () { return Archivio.scrivi('problemaCodice', false); })
+      .catch(function () { /* si riproverà aprendo di nuovo il link */ });
+  }
+
   el.versione.textContent = 'v' + CONFIG.VERSIONE + (CONFIG.URL_WEB_APP ? '' : ' · prova');
-  aggiornaHome();
-  Coda.invia();
+
+  codiceDalLink().then(function () {
+    if (Coda.inProva()) return true;
+    return Archivio.leggi('codiceOperatore');
+  }).then(function (collegato) {
+    if (!collegato) {
+      mostra('collegamento');
+      return;
+    }
+    aggiornaHome();
+    Coda.invia();
+    Coda.scaricaCantieri();
+  });
 })();

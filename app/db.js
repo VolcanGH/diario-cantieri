@@ -10,6 +10,8 @@
   var NOME_DB = 'diario-cantieri';
   var VERSIONE_DB = 1;
   var NOTE_INVIATE_DA_TENERE = 30;
+  var NOTE_PER_INVIO = 20;
+  var MILLISECONDI_ATTESA_RISPOSTA = 45000;
 
   var connessione = null;
 
@@ -24,6 +26,7 @@
           db.createObjectStore('note', { keyPath: 'id' }).createIndex('stato', 'stato');
         }
         if (!db.objectStoreNames.contains('impostazioni')) {
+          // Coppie chiave/valore: codiceOperatore, cantieri, usoCantieri, problemaCodice…
           db.createObjectStore('impostazioni', { keyPath: 'chiave' });
         }
       };
@@ -125,7 +128,73 @@
     return transazione(true, function (tx) { tx.objectStore('impostazioni').put({ chiave: chiave, valore: valore }); });
   }
 
-  // ---- Coda di invio ----
+  // ---- Collegamento con il foglio dell'ufficio ----
+
+  // Senza indirizzo della Web App l'app è in modalità prova: cantieri finti e invio simulato.
+  function inProva() { return !globale.CONFIG.URL_WEB_APP; }
+
+  // Chiamata alla Web App di Google. Il POST usa "text/plain" apposta: così il browser
+  // non fa la richiesta preliminare (preflight) che Apps Script non sa gestire.
+  function chiama(metodo, parametri, corpo) {
+    var url = globale.CONFIG.URL_WEB_APP;
+    if (parametri) url += (url.indexOf('?') < 0 ? '?' : '&') + parametri;
+    var controllo = new AbortController();
+    var timer = setTimeout(function () { controllo.abort(); }, MILLISECONDI_ATTESA_RISPOSTA);
+    var opzioni = { method: metodo, redirect: 'follow', signal: controllo.signal };
+    if (corpo !== undefined) {
+      opzioni.headers = { 'Content-Type': 'text/plain;charset=utf-8' };
+      opzioni.body = JSON.stringify(corpo);
+    }
+    return fetch(url, opzioni).then(function (risposta) {
+      if (!risposta.ok) throw new Error('HTTP ' + risposta.status);
+      return risposta.json();
+    }).finally(function () { clearTimeout(timer); });
+  }
+
+  // Scarica l'elenco dei cantieri attivi e lo tiene in memoria per quando manca la rete.
+  function scaricaCantieri() {
+    if (inProva() || !navigator.onLine) return Promise.resolve(null);
+    return leggi('codiceOperatore').then(function (codice) {
+      if (!codice) return null;
+      return chiama('GET', 'c=' + encodeURIComponent(codice)).then(function (risposta) {
+        if (!risposta || !risposta.ok) {
+          if (risposta && risposta.errore === 'codice') return scrivi('problemaCodice', true).then(function () { return null; });
+          return null;
+        }
+        var cantieri = Array.isArray(risposta.cantieri) ? risposta.cantieri : [];
+        return scrivi('cantieri', cantieri)
+          .then(function () { return scrivi('problemaCodice', false); })
+          .then(function () { return cantieri; });
+      });
+    }).catch(function () { return null; });
+  }
+
+  // Invia le note in attesa, un blocco alla volta. Una nota è "inviata" solo quando
+  // il foglio ne conferma l'id: così un invio interrotto a metà non perde nulla.
+  function inviaVero() {
+    if (!navigator.onLine) return Promise.resolve();
+    return Promise.all([leggi('codiceOperatore'), noteInAttesa()]).then(function (dati) {
+      var codice = dati[0];
+      var note = dati[1];
+      if (!codice || !note.length) return;
+      var blocco = note.slice(0, NOTE_PER_INVIO).map(function (nota) {
+        return { id: nota.id, dataOraNota: nota.dataOraNota, cantiere: nota.cantiere, testo: nota.testo, tipo: 'nota' };
+      });
+      return chiama('POST', null, { codice: codice, note: blocco }).then(function (risposta) {
+        if (!risposta || !risposta.ok) {
+          if (risposta && risposta.errore === 'codice') return scrivi('problemaCodice', true);
+          throw new Error('Risposta non valida');
+        }
+        var confermate = (risposta.ricevute || []).concat(risposta.scartate || []);
+        return segnaInviate(confermate)
+          .then(sfoltisci)
+          .then(function () { return scrivi('problemaCodice', false); })
+          .then(function () {
+            if (note.length > blocco.length) return inviaVero();
+          });
+      });
+    });
+  }
 
   var invioInCorso = null;
 
@@ -133,8 +202,8 @@
     return new Promise(function (risolvi) { setTimeout(risolvi, millisecondi); });
   }
 
-  // Modalità prova (CONFIG.URL_WEB_APP vuoto): finge l'invio dopo un attimo, ma solo se c'è rete,
-  // così si vede già come si comporta l'app senza campo. L'invio vero arriva con il backend.
+  // Modalità prova: finge l'invio dopo un attimo, ma solo se c'è rete,
+  // così si vede già come si comporta l'app senza campo.
   function inviaFinto() {
     if (!navigator.onLine) return Promise.resolve();
     return attendi(1200).then(noteInAttesa).then(function (note) {
@@ -147,7 +216,7 @@
   // se un invio è già in corso non ne parte un secondo.
   function invia() {
     if (invioInCorso) return invioInCorso;
-    invioInCorso = inviaFinto()
+    invioInCorso = (inProva() ? inviaFinto() : inviaVero())
       .catch(function () { /* resta tutto in coda: si riprova più tardi */ })
       .then(function () {
         invioInCorso = null;
@@ -168,6 +237,8 @@
 
   globale.Coda = {
     invia: invia,
+    scaricaCantieri: scaricaCantieri,
+    inProva: inProva,
     // La pagina mette qui una funzione da chiamare quando la coda cambia.
     alCambio: null
   };

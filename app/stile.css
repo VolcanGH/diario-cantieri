@@ -321,6 +321,12 @@ body {
 
 .conferma-riga { margin: 0; font-size: 1.15rem; font-weight: 500; }
 
+/* ---- Telefono non collegato ---- */
+
+.schermo-collegamento { justify-content: center; text-align: center; }
+
+.testo-grande { margin: 0; font-size: 1.15rem; line-height: 1.4; }
+
 @media (prefers-reduced-motion: reduce) {
   .btn-microfono.ascolto .icona-microfono { animation: none; }
 }

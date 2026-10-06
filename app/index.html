@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <!-- interactive-widget=resizes-content: quando si apre la tastiera la pagina si accorcia,
+       così i pulsanti in basso restano visibili sopra la tastiera. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="color-scheme" content="only light">
+  <meta name="theme-color" content="#FFD500">
+  <title>Diario Cantieri</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="stile.css">
+</head>
+<body>
+
+  <!-- 1. Schermata iniziale -->
+  <section id="schermo-home" class="schermo attivo" aria-label="Inizio">
+    <button id="btn-nuova" class="btn btn-principale btn-gigante" type="button">Cosa è successo?</button>
+    <p id="stato-invio" class="stato" role="status">Tutto inviato ✓</p>
+    <div id="ultime" class="ultime" hidden>
+      <h2>Ultime note inviate</h2>
+      <ul id="ultime-elenco"></ul>
+    </div>
+    <p id="versione" class="versione"></p>
+  </section>
+
+  <!-- 2. Racconta -->
+  <section id="schermo-racconta" class="schermo" aria-label="Racconta">
+    <button id="btn-microfono" class="btn btn-principale btn-microfono" type="button">
+      <span class="microfono-icona" aria-hidden="true">🎤</span>
+      <span id="microfono-testo">Tocca per parlare</span>
+    </button>
+    <button id="aiuto-tastiera" class="aiuto" type="button" hidden>Tocca il microfono 🎤 sulla tastiera e parla</button>
+    <textarea id="testo" aria-label="Testo della nota" lang="it" autocapitalize="sentences" autocomplete="off"
+      placeholder="Qui compare quello che dici. Puoi anche scrivere."></textarea>
+    <div class="barra">
+      <button id="btn-annulla" class="btn btn-annulla" type="button">Annulla</button>
+      <button id="btn-avanti" class="btn btn-principale" type="button" disabled>Avanti</button>
+    </div>
+  </section>
+
+  <!-- 3. Quale cantiere? -->
+  <section id="schermo-cantiere" class="schermo" aria-label="Quale cantiere?">
+    <h1 class="titolo">Quale cantiere?</h1>
+    <p id="avviso-cantiere" class="avviso" role="alert" hidden>Non sono riuscito a salvare la nota. Riprova.</p>
+    <div id="elenco-cantieri" class="elenco"></div>
+    <div class="piede">
+      <button id="btn-generale" class="btn btn-scuro" type="button">Non so / Generale</button>
+    </div>
+  </section>
+
+  <!-- 4. Conferma -->
+  <section id="schermo-conferma" class="schermo schermo-conferma" role="status" aria-label="Nota salvata">
+    <div class="conferma-spunta" aria-hidden="true">✓</div>
+    <p class="conferma-titolo">Nota salvata</p>
+    <p id="conferma-cantiere" class="conferma-riga"></p>
+    <p id="conferma-attesa" class="conferma-riga" hidden>Verrà inviata appena c'è campo</p>
+  </section>
+
+  <!-- Conferma prima di buttare via una nota già scritta -->
+  <section id="schermo-butta" class="schermo" aria-label="Buttare via la nota?">
+    <h1 class="titolo titolo-centrato">Butto via quello che hai scritto?</h1>
+    <button id="btn-butta-no" class="btn btn-principale btn-gigante" type="button">No, torna alla nota</button>
+    <button id="btn-butta-si" class="btn" type="button">Sì, butta via</button>
+  </section>
+
+  <script src="config.js"></script>
+  <script src="db.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

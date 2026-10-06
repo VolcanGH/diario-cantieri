@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Icona di Diario Cantieri: casco nero su fondo giallo.
+       Il disegno sta nel cerchio centrale (80% del lato): Android può ritagliare l'icona senza tagliarlo.
+       Da questo file si ricavano icon-192.png e icon-512.png. -->
+  <rect width="512" height="512" fill="#FFD500"/>
+  <!-- calotta -->
+  <path d="M136 300 A120 120 0 0 1 376 300 Z" fill="#111111"/>
+  <!-- nervatura centrale -->
+  <rect x="230" y="164" width="52" height="136" rx="12" fill="#111111"/>
+  <rect x="214" y="204" width="10" height="96" rx="5" fill="#FFD500"/>
+  <rect x="288" y="204" width="10" height="96" rx="5" fill="#FFD500"/>
+  <!-- visiera -->
+  <rect x="92" y="300" width="328" height="48" rx="24" fill="#111111"/>
+</svg>

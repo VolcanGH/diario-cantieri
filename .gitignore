@@ -1,0 +1,7 @@
+# Accesso personale di clasp a Google: non deve mai finire pubblico
+.clasprc.json
+
+node_modules/
+*.log
+Thumbs.db
+desktop.ini

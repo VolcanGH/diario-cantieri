@@ -171,8 +171,9 @@ function preparaFoglio() {
   var cantieri = assicuraFoglio(ss, NOME_CANTIERI);
   cantieri.getRange('B2:B200').insertCheckboxes();
   if (!contiene(cantieri, 1, GENERALE)) {
-    cantieri.appendRow([GENERALE, true, 'Sempre attivo: raccoglie le note senza cantiere. Per spostarle cambia il cantiere in "Segnalazioni".']);
+    scriviRiga(cantieri, [GENERALE, true, 'Sempre attivo: raccoglie le note senza cantiere. Per spostarle cambia il cantiere in "Segnalazioni".']);
   }
+  spostaInAlto(cantieri, GENERALE);
   cantieri.setColumnWidth(1, 260);
   cantieri.setColumnWidth(3, 420);
 
@@ -222,6 +223,38 @@ function assicuraFoglio(ss, nome) {
   return foglio;
 }
 
+// Prima riga con la colonna A vuota: "appendRow" non va bene perché le caselle di spunta
+// preparate in anticipo contano come contenuto e la riga finirebbe in fondo.
+function primaRigaLibera(foglio) {
+  var valori = foglio.getRange(1, 1, Math.max(foglio.getLastRow(), 1), 1).getValues();
+  for (var i = 0; i < valori.length; i++) {
+    if (String(valori[i][0]).trim() === '') return i + 1;
+  }
+  return valori.length + 1;
+}
+
+// Scrive i valori nella prima riga libera e la restituisce.
+function scriviRiga(foglio, valori) {
+  var riga = primaRigaLibera(foglio);
+  foglio.getRange(riga, 1, 1, valori.length).setValues([valori]);
+  return riga;
+}
+
+// Se una riga è finita sotto le righe vuote (versioni precedenti), la riporta in alto.
+function spostaInAlto(foglio, valore) {
+  var colonna = foglio.getRange(1, 1, Math.max(foglio.getLastRow(), 1), 1).getValues();
+  for (var i = 0; i < colonna.length; i++) {
+    if (String(colonna[i][0]).trim().toLowerCase() !== String(valore).toLowerCase()) continue;
+    var rigaAttuale = i + 1;
+    var libera = primaRigaLibera(foglio);
+    if (rigaAttuale <= libera) return;
+    var dati = foglio.getRange(rigaAttuale, 1, 1, foglio.getLastColumn()).getValues();
+    foglio.deleteRow(rigaAttuale);
+    foglio.getRange(libera, 1, 1, dati[0].length).setValues(dati);
+    return;
+  }
+}
+
 function contiene(foglio, colonna, valore) {
   if (foglio.getLastRow() < 2) return false;
   return foglio.getRange(2, colonna, foglio.getLastRow() - 1, 1).getValues().some(function (riga) {
@@ -231,8 +264,8 @@ function contiene(foglio, colonna, valore) {
 
 function assicuraConfig(foglio, chiave, valore, nota) {
   if (contiene(foglio, 1, chiave)) return;
-  foglio.appendRow([chiave, valore, nota]);
-  if (typeof valore === 'boolean') foglio.getRange(foglio.getLastRow(), 2).insertCheckboxes();
+  var riga = scriviRiga(foglio, [chiave, valore, nota]);
+  if (typeof valore === 'boolean') foglio.getRange(riga, 2).insertCheckboxes();
 }
 
 function leggiConfig(chiave) {
@@ -260,8 +293,8 @@ function nuovoOperatore() {
   if (!nome) return;
 
   var codice = nuovoCodice();
-  operatori.appendRow([codice, nome, true]);
-  operatori.getRange(operatori.getLastRow(), 3).insertCheckboxes();
+  var riga = scriviRiga(operatori, [codice, nome, true]);
+  operatori.getRange(riga, 3).insertCheckboxes();
 
   var url = String(leggiConfig('url_app')).trim();
   var link = url ? url + (url.indexOf('?') < 0 ? '?' : '&') + 'c=' + codice : '';

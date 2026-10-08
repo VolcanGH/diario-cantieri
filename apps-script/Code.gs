@@ -2,7 +2,8 @@
 // Diario Cantieri — backend su Google Apps Script, legato al foglio Google dell'ufficio.
 //
 // Pubblicato come Web App ("Esegui come: me", "Accesso: chiunque"):
-//   GET  …/exec?c=CODICE   → { ok: true, cantieri: [...] }                  elenco dei cantieri attivi
+//   GET  …/exec?codice=CODICE → { ok: true, cantieri: [...] }               elenco dei cantieri attivi
+//   (il nome "c" NON si può usare: per Apps Script è riservato e la chiamata risponde "file non trovato")
 //   POST …/exec            → { ok: true, ricevute: [id...], scartate: [] }   riceve una o più note
 // Ogni richiesta porta il codice segreto dell'operatore, controllato nel foglio nascosto "Operatori".
 // Nel foglio c'è il menu "Diario Cantieri": "Prepara il foglio" e "Nuovo operatore…".
@@ -24,12 +25,13 @@ var MAX_NOTE_PER_RICHIESTA = 50;
 var MAX_LUNGHEZZA_TESTO = 5000;
 var MAX_LUNGHEZZA_CANTIERE = 100;
 var RIGHE_PREPARATE = 5000;   // quante righe preparare in anticipo (formati e tendine)
+var VERSIONE_SCRIPT = 2;      // compare nelle risposte: serve a capire quale versione è pubblicata
 
 // ---------- Web App ----------
 
 function doGet(e) {
   try {
-    var codice = e && e.parameter ? e.parameter.c : '';
+    var codice = e && e.parameter ? e.parameter.codice : '';
     if (!operatoreDaCodice(codice)) return rispostaJson({ ok: false, errore: 'codice' });
     return rispostaJson({ ok: true, cantieri: cantieriAttivi() });
   } catch (errore) {
@@ -53,6 +55,7 @@ function doPost(e) {
 }
 
 function rispostaJson(oggetto) {
+  oggetto.versione = VERSIONE_SCRIPT;
   return ContentService.createTextOutput(JSON.stringify(oggetto))
     .setMimeType(ContentService.MimeType.JSON);
 }

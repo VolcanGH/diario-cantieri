@@ -156,7 +156,7 @@
     if (inProva() || !navigator.onLine) return Promise.resolve(null);
     return leggi('codiceOperatore').then(function (codice) {
       if (!codice) return null;
-      return chiama('GET', 'c=' + encodeURIComponent(codice)).then(function (risposta) {
+      return chiama('GET', 'codice=' + encodeURIComponent(codice)).then(function (risposta) {
         if (!risposta || !risposta.ok) {
           if (risposta && risposta.errore === 'codice') return scrivi('problemaCodice', true).then(function () { return null; });
           return null;

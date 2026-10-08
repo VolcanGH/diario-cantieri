@@ -5,9 +5,9 @@
 self.CONFIG = {
   // Indirizzo della Web App di Google (quello che finisce con /exec, dato dalla pubblicazione dello script).
   // Vuoto = modalità prova: cantieri finti e invio simulato, in ufficio non arriva niente.
-  URL_WEB_APP: 'https://script.google.com/macros/s/AKfycbxJJuXnXqBT9_UIikq4ShIWTqH6ptqEzt88Hvq3KIqaPrpEd7YMYAhj_VUsGLknmD7m/exec',
+  URL_WEB_APP: 'https://script.google.com/macros/s/AKfycbzpr1xB6AIxnmKZQHq-ypa3rwCXaMdOQbOnHTKW9HGSKqLIsHXphtQXPfZtutl7NeHmsw/exec',
 
   // Numero di versione, mostrato in piccolo nella schermata iniziale.
   // Va aumentato a ogni pubblicazione.
-  VERSIONE: '4'
+  VERSIONE: '5'
 };

@@ -189,9 +189,14 @@
         return segnaInviate(confermate)
           .then(sfoltisci)
           .then(function () { return scrivi('problemaCodice', false); })
+          .then(function () { return scrivi('ultimoErroreInvio', 0); })
           .then(function () {
             if (note.length > blocco.length) return inviaVero();
           });
+      }, function (errore) {
+        // Si segna quando è fallito l'ultimo invio con la rete: serve alla schermata iniziale
+        // per distinguere "non c'è campo" da "il foglio non risponde da un giorno".
+        return scrivi('ultimoErroreInvio', Date.now()).then(function () { throw errore; });
       });
     });
   }

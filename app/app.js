@@ -9,6 +9,9 @@
   var MILLISECONDI_CONFERMA = 3000;
   var MILLISECONDI_ANTI_DOPPIO_TOCCO = 400;
   var MILLISECONDI_AVVISO_MICROFONO = 2500;
+  var MILLISECONDI_RITENTATIVO = 60000;
+  var MILLISECONDI_UN_GIORNO = 24 * 60 * 60 * 1000;
+  var MILLISECONDI_SEI_ORE = 6 * 60 * 60 * 1000;
 
   // Cantieri finti, usati solo in modalità prova (CONFIG.URL_WEB_APP vuoto).
   var CANTIERI_FINTI = [
@@ -54,7 +57,8 @@
     salvataggio: false,
     timerConferma: null,
     timerMicrofono: null,
-    erroriPermesso: 0
+    erroriPermesso: 0,
+    registrazioneSW: null
   };
 
   // ---- Utilità ----
@@ -164,12 +168,22 @@
   // ---- Schermata iniziale ----
 
   function aggiornaHome() {
-    Promise.all([Archivio.contaInAttesa(), Archivio.leggi('problemaCodice')]).then(function (dati) {
-      var n = dati[0];
+    Promise.all([
+      Archivio.noteInAttesa(),
+      Archivio.leggi('problemaCodice'),
+      Archivio.leggi('ultimoErroreInvio')
+    ]).then(function (dati) {
+      var note = dati[0];
+      var n = note.length;
       var problemaCodice = dati[1] === true;
+      var ultimoErrore = dati[2] || 0;
+      // Nota ferma da più di un giorno con la rete che c'era e il foglio che non rispondeva:
+      // visto dal telefono è uguale a "non c'è campo", ma qui serve l'ufficio.
+      var ferma = n > 0
+        && Date.now() - new Date(note[0].dataOraNota).getTime() > MILLISECONDI_UN_GIORNO
+        && Date.now() - ultimoErrore < MILLISECONDI_SEI_ORE;
       var testo;
-      if (problemaCodice) {
-        // L'ufficio non riconosce il codice del telefono: le note restano qui finché non si risolve.
+      if (problemaCodice || ferma) {
         testo = n > 0 ? 'Note salvate sul telefono. Per farle partire chiama l\'ufficio.'
           : 'Il telefono non è riconosciuto. Chiama l\'ufficio.';
       } else {
@@ -462,15 +476,53 @@
 
   // La coda riparte al ritorno della rete e quando l'app torna in primo piano.
   // Si aggiorna sempre, anche se la schermata iniziale non è in vista: costa niente
-  // e così è già giusta quando ci si torna.
-  Coda.alCambio = aggiornaHome;
+  // e così è già giusta quando ci si torna. Se restano note in attesa, si chiede
+  // al telefono di riprovare in background appena torna la rete.
+  Coda.alCambio = function () {
+    aggiornaHome();
+    chiediInvioInBackground();
+  };
   window.addEventListener('online', function () { Coda.invia(); });
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) return;
+    if (document.hidden) { chiediInvioInBackground(); return; }
     Coda.invia();
     Coda.scaricaCantieri();
     if (stato.schermo === 'home') aggiornaHome();
   });
+  // Ad app aperta si riprova comunque ogni minuto.
+  setInterval(function () { Coda.invia(); }, MILLISECONDI_RITENTATIVO);
+
+  // ---- Service worker: l'app si apre anche senza rete e si aggiorna da sola ----
+
+  function chiediInvioInBackground() {
+    var registrazione = stato.registrazioneSW;
+    if (!registrazione || !registrazione.sync) return;
+    Archivio.contaInAttesa().then(function (n) {
+      if (n > 0) return registrazione.sync.register('invia-note');
+    }).catch(function () { /* non supportato o rifiutato: restano i tentativi ad app aperta */ });
+  }
+
+  if ('serviceWorker' in navigator) {
+    var avevaGiaUnWorker = !!navigator.serviceWorker.controller;
+    // updateViaCache 'none': anche config.js e db.js (letti dal worker) vengono ricontrollati in rete,
+    // altrimenti un numero di versione nuovo potrebbe restare nascosto dalla cache per 10 minuti.
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (registrazione) {
+      stato.registrazioneSW = registrazione;
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) registrazione.update().catch(function () { /* senza rete */ });
+      });
+    }).catch(function () { /* senza service worker l'app funziona lo stesso, solo non si apre senza rete */ });
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      // Versione nuova attiva: si ricarica solo dalla schermata iniziale, mai con una nota a metà.
+      if (avevaGiaUnWorker && stato.schermo === 'home') location.reload();
+      avevaGiaUnWorker = true;
+    });
+  }
+
+  // Chiede al telefono di non cancellare la memoria dell'app per fare spazio.
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persist().catch(function () { /* non indispensabile */ });
+  }
 
   // ---- Avvio ----
 

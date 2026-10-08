@@ -14,6 +14,8 @@ var NOME_OPERATORI = 'Operatori';
 var NOME_CONFIG = 'Config';
 var GENERALE = 'Generale';
 
+var FOGLI_DI_SISTEMA = [NOME_CANTIERI, NOME_SEGNALAZIONI, NOME_OPERATORI, NOME_CONFIG];
+
 var INTESTAZIONI = {};
 INTESTAZIONI[NOME_CANTIERI] = ['nome', 'attivo', 'note'];
 INTESTAZIONI[NOME_SEGNALAZIONI] = ['id', 'data_ora_nota', 'data_ora_ricezione', 'operatore', 'cantiere',
@@ -25,7 +27,7 @@ var MAX_NOTE_PER_RICHIESTA = 50;
 var MAX_LUNGHEZZA_TESTO = 5000;
 var MAX_LUNGHEZZA_CANTIERE = 100;
 var RIGHE_PREPARATE = 5000;   // quante righe preparare in anticipo (formati e tendine)
-var VERSIONE_SCRIPT = 2;      // compare nelle risposte: serve a capire quale versione è pubblicata
+var VERSIONE_SCRIPT = 3;      // compare nelle risposte: serve a capire quale versione è pubblicata
 
 // ---------- Web App ----------
 
@@ -134,6 +136,11 @@ function aggiungiNote(operatore, note) {
       foglio.getRange(prima, 1, righe.length, righe[0].length).setValues(righe);
       foglio.getRange(prima, 9, righe.length, 1).insertCheckboxes();
       SpreadsheetApp.flush();
+      // Alla prima nota di un cantiere nasce il suo foglio.
+      var visti = {};
+      righe.forEach(function (riga) {
+        if (!visti[riga[4]]) { visti[riga[4]] = true; assicuraFoglioCantiere(riga[4]); }
+      });
     }
   } finally {
     blocco.releaseLock();
@@ -153,6 +160,80 @@ function pulisciNota(nota) {
   var data = new Date(nota.dataOraNota);
   if (isNaN(data.getTime())) data = new Date();
   return { id: id, testo: testo, cantiere: cantiere, dataOraNota: data };
+}
+
+// ---------- Fogli per cantiere ----------
+
+// Nome di foglio valido a partire dal nome del cantiere (Google vieta [ ] * ? /  :).
+function nomeFoglioPerCantiere(cantiere) {
+  var nome = String(cantiere).replace(/[\[\]*?\/\\:]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90);
+  if (!nome) nome = GENERALE;
+  var minuscolo = nome.toLowerCase();
+  if (FOGLI_DI_SISTEMA.some(function (sistema) { return sistema.toLowerCase() === minuscolo; })) nome += ' (cantiere)';
+  return nome;
+}
+
+// Crea il foglio del cantiere se non esiste: una formula che legge "Segnalazioni"
+// filtrata per quel cantiere, dalla più recente. Si può chiamare quante volte si vuole.
+function assicuraFoglioCantiere(cantiere) {
+  cantiere = String(cantiere || '').trim();
+  if (!cantiere) return null;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var nome = nomeFoglioPerCantiere(cantiere);
+  var foglio = ss.getSheetByName(nome);
+  if (foglio) return foglio;
+
+  foglio = ss.insertSheet(nome);
+  foglio.getRange('A1').setValue('Cantiere:').setFontWeight('bold');
+  foglio.getRange('B1').setValue(cantiere).setFontWeight('bold');
+  foglio.getRange('A2').setValue('Foglio automatico: non scrivere qui. Per spostare una nota cambia il cantiere nel foglio "Segnalazioni".')
+    .setFontStyle('italic').setFontColor('#595959');
+  foglio.getRange('A4:D4').setValues([['data_ora_nota', 'operatore', 'testo_originale', 'testo_corretto']]).setFontWeight('bold');
+  // Il separatore ";" funziona con qualsiasi lingua del foglio. Si usa FILTER e non QUERY
+  // perché QUERY si rompe con gli apostrofi nei nomi e con i testi che sembrano numeri.
+  foglio.getRange('A5').setFormula(
+    '=IFERROR(SORT(CHOOSECOLS(FILTER(Segnalazioni!B2:I; Segnalazioni!E2:E = $B$1); 1; 3; 5; 6); 1; FALSE); "Nessuna nota per questo cantiere")'
+  );
+  foglio.getRange('A5:A' + RIGHE_PREPARATE).setNumberFormat('dd/mm/yyyy hh:mm');
+  foglio.getRange('C5:D' + RIGHE_PREPARATE).setWrap(true);
+  [130, 110, 420, 420].forEach(function (larghezza, i) { foglio.setColumnWidth(i + 1, larghezza); });
+  foglio.setFrozenRows(4);
+  // Avviso (non blocco) se qualcuno prova a scrivere qui.
+  foglio.protect().setDescription('Foglio automatico del cantiere').setWarningOnly(true);
+  return foglio;
+}
+
+// Tutti i cantieri presenti in "Segnalazioni" hanno il loro foglio.
+function assicuraTuttiIFogliCantiere() {
+  var visti = {};
+  valoriFoglio(NOME_SEGNALAZIONI).forEach(function (riga) {
+    var cantiere = String(riga[4] || '').trim();
+    if (cantiere && !visti[cantiere]) {
+      visti[cantiere] = true;
+      assicuraFoglioCantiere(cantiere);
+    }
+  });
+}
+
+// Quando l'ufficio cambia il cantiere di una nota (colonna E di "Segnalazioni")
+// il foglio del cantiere nuovo nasce se non c'è; i fogli si aggiornano da soli.
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    var foglio = e.range.getSheet();
+    if (foglio.getName() !== NOME_SEGNALAZIONI) return;
+    if (e.range.getColumn() > 5 || e.range.getLastColumn() < 5) return;
+    var visti = {};
+    foglio.getRange(e.range.getRow(), 5, e.range.getNumRows(), 1).getValues().forEach(function (riga) {
+      var cantiere = String(riga[0] || '').trim();
+      if (cantiere && !visti[cantiere]) {
+        visti[cantiere] = true;
+        assicuraFoglioCantiere(cantiere);
+      }
+    });
+  } catch (errore) {
+    console.error('onEdit: ' + errore);
+  }
 }
 
 // ---------- Menu e preparazione del foglio ----------
@@ -213,6 +294,8 @@ function preparaFoglio() {
       ss.deleteSheet(foglio);
     }
   });
+
+  assicuraTuttiIFogliCantiere();
 
   ss.setActiveSheet(segnalazioni);
   SpreadsheetApp.getUi().alert('Foglio pronto.\n\n1. Scrivi i cantieri nel foglio "Cantieri" e spunta "attivo".\n2. Metti l\'indirizzo dell\'app in "Config" → url_app.\n3. Crea gli operatori dal menu "Diario Cantieri → Nuovo operatore…".');

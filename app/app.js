@@ -612,16 +612,10 @@
       lista.forEach(function (a) { testi[a.ora] = a.testo; });
       var adesso = new Date();
       var oraAdesso = chiaveGiorno(giorno) === chiaveGiorno(adesso) ? adesso.getHours() : -1;
-      var rigaAdesso = null;
       el.elencoOre.textContent = '';
       for (var ora = PRIMA_ORA; ora < ULTIMA_ORA; ora++) {
-        var riga = rigaOra(ora, testi[ora] || '', ora === oraAdesso);
-        el.elencoOre.appendChild(riga);
-        if (ora === oraAdesso) rigaAdesso = riga;
+        el.elencoOre.appendChild(rigaOra(ora, testi[ora] || '', ora === oraAdesso));
       }
-      // Oggi l'ora di adesso deve essere in vista anche se l'elenco scorre.
-      if (rigaAdesso) rigaAdesso.scrollIntoView({ block: 'nearest' });
-      else el.elencoOre.scrollTop = 0;
     });
   }
 

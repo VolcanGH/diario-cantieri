@@ -78,15 +78,15 @@
 
   <!-- 5. Calendario: gli appuntamenti dell'operatore, un giorno alla volta, dal lunedì al sabato.
        Restano solo sul telefono: in ufficio non arriva niente. -->
-  <section id="schermo-calendario" class="schermo" aria-label="Calendario">
+  <section id="schermo-calendario" class="schermo schermo-calendario" aria-label="Calendario">
     <!-- In alto: freccia "giorno prima", il giorno su due righe, freccia "giorno dopo". -->
     <div class="giorno-barra">
       <button id="btn-giorno-prima" class="btn btn-freccia" type="button" aria-label="Giorno prima">‹</button>
       <h1 id="giorno-titolo" class="titolo giorno-titolo"><span id="giorno-nome">Oggi</span><br><span id="giorno-data"></span></h1>
       <button id="btn-giorno-dopo" class="btn btn-freccia" type="button" aria-label="Giorno dopo">›</button>
     </div>
-    <!-- Una riga per ogni ora dalle 7 alle 19; il tocco apre "Racconta" per quella casella. -->
-    <div id="elenco-ore" class="elenco elenco-ore"></div>
+    <!-- Una riga per ogni ora dalle 7 alle 19, tutte in vista; il tocco apre "Racconta" per quella casella. -->
+    <div id="elenco-ore" class="elenco-ore"></div>
     <div class="piede">
       <button id="btn-calendario-chiudi" class="btn btn-chiudi" type="button">Torna all'inizio</button>
     </div>

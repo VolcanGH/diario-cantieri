@@ -256,7 +256,9 @@ body {
 
 #testo::placeholder { color: var(--grigio); opacity: 1; }
 
-/* Interruttore "Da fare per l'ufficio": spento = nota, acceso (scuro, con la spunta) = richiesta. */
+/* Interruttore "Da fare per l'ufficio": spento = nota, acceso (scuro, con la spunta) = richiesta.
+   Resta visibile anche con la tastiera aperta: l'operatore deve vederlo e poterlo accendere
+   mentre scrive. A restringersi è l'area di testo (che ha un minimo), non la schermata. */
 .btn-ufficio {
   justify-content: flex-start;
   gap: 14px;
@@ -286,9 +288,6 @@ body {
 .btn-ufficio.attivo .spunta { border-color: var(--giallo); background: var(--giallo); }
 
 .btn-ufficio.attivo .spunta::after { content: '✓'; }
-
-/* Con la tastiera aperta anche l'interruttore lascia il posto al testo. */
-.tastiera-aperta .btn-ufficio { display: none; }
 
 .barra {
   display: flex;

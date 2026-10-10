@@ -527,6 +527,9 @@
   el.aiuto.addEventListener('click', usaTastiera);
   el.testo.addEventListener('input', function () { salvaBozza(el.testo.value); aggiornaAvanti(); });
   el.ufficio.addEventListener('click', function () { vibra(); impostaPerUfficio(!stato.perUfficio); });
+  // Toccandolo mentre la tastiera è aperta, il testo non perde il fuoco: la tastiera resta aperta
+  // e si può continuare a scrivere o dettare (il fuoco si sposta con mousedown, che qui si annulla).
+  el.ufficio.addEventListener('mousedown', function (evento) { evento.preventDefault(); });
   el.annulla.addEventListener('click', annulla);
   el.avanti.addEventListener('click', apriCantieri);
   el.generale.addEventListener('click', function () { scegliCantiere(GENERALE); });

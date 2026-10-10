@@ -5,8 +5,9 @@
 importScripts('config.js', 'db.js');
 
 var NOME_CACHE = 'diario-cantieri-v' + self.CONFIG.VERSIONE;
+// "./" è la pagina: qualunque indirizzo dell'app (anche index.html) viene servito da lì.
 var FILE_APP = [
-  './', 'index.html', 'stile.css', 'config.js', 'db.js', 'speech.js', 'app.js',
+  './', 'stile.css', 'config.js', 'db.js', 'speech.js', 'app.js',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'
 ];
 
@@ -42,14 +43,17 @@ self.addEventListener('fetch', function (evento) {
   if (new URL(richiesta.url).origin !== self.location.origin) return;
 
   evento.respondWith(
-    caches.open(NOME_CACHE).then(function (cache) {
+    caches.open(NOME_CACHE)
       // ignoreSearch: il link personale "…/?c=CODICE" deve aprire la stessa pagina salvata.
-      return cache.match(richiesta, { ignoreSearch: true }).then(function (salvata) {
+      .then(function (cache) { return cache.match(richiesta, { ignoreSearch: true }); })
+      .catch(function () { return undefined; })
+      .then(function (salvata) {
         if (salvata) return salvata;
-        if (richiesta.mode === 'navigate') return cache.match('./');
+        if (richiesta.mode === 'navigate') {
+          return caches.match('./', { ignoreSearch: true }).then(function (pagina) { return pagina || fetch(richiesta); });
+        }
         return fetch(richiesta);
-      });
-    }).catch(function () { return fetch(richiesta); })
+      })
   );
 });
 

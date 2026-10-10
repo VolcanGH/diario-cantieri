@@ -75,6 +75,8 @@
     var r = attivo;
     attivo = null;
     clearTimeout(chiusuraForzata);
+    // Niente più risultati né fine: un risultato in ritardo non deve riscrivere il testo.
+    r.onresult = function () {};
     r.onend = function () {};
     try { r.abort(); } catch (e) { /* già chiuso */ }
   }

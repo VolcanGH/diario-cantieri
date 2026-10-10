@@ -6,21 +6,15 @@
 
   var GENERALE = 'Generale';
   var CHIAVE_BOZZA = 'diario-cantieri:bozza';
+  var CHIAVE_BOZZA_INIZIO = 'diario-cantieri:bozza-inizio';
   var MILLISECONDI_CONFERMA = 3000;
   var MILLISECONDI_ANTI_DOPPIO_TOCCO = 400;
   var MILLISECONDI_AVVISO_MICROFONO = 2500;
+  var MILLISECONDI_ASCOLTO_MINIMO = 700;
   var MILLISECONDI_RITENTATIVO = 60000;
   var MILLISECONDI_UN_GIORNO = 24 * 60 * 60 * 1000;
   var MILLISECONDI_SEI_ORE = 6 * 60 * 60 * 1000;
-
-  // Cantieri finti, usati solo in modalità prova (CONFIG.URL_WEB_APP vuoto).
-  var CANTIERI_FINTI = [
-    'Casa Rossi – Predazzo',
-    'Condominio Lagorai',
-    'Capannone Ziano',
-    'Ristrutturazione Bianchi – Tesero',
-    'Villetta Verdi – Cavalese'
-  ];
+  var MILLISECONDI_CONTROLLO_VERSIONE = 15 * 60 * 1000;
 
   function $(id) { return document.getElementById(id); }
 
@@ -53,27 +47,20 @@
     cambioIl: 0,
     guardia: false,
     ignoraPop: false,
-    dopoPop: null,
+    rimettiGuardia: false,
     salvataggio: false,
     timerConferma: null,
     timerMicrofono: null,
+    ascoltoDa: 0,
     erroriPermesso: 0,
-    registrazioneSW: null
+    registrazioneSW: null,
+    ultimoControlloVersione: 0
   };
 
   // ---- Utilità ----
 
   function vibra() {
     if (navigator.vibrate) { try { navigator.vibrate(30); } catch (e) { /* non supportata */ } }
-  }
-
-  function nuovoId() {
-    if (crypto.randomUUID) return crypto.randomUUID();
-    var b = crypto.getRandomValues(new Uint8Array(16));
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    var h = Array.prototype.map.call(b, function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
-    return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
   }
 
   function due(n) { return (n < 10 ? '0' : '') + n; }
@@ -83,7 +70,7 @@
   function formattaQuando(iso) {
     var d = new Date(iso);
     var ora = due(d.getHours()) + ':' + due(d.getMinutes());
-    var giorni = Math.round((inizioGiorno(new Date()) - inizioGiorno(d)) / 86400000);
+    var giorni = Math.round((inizioGiorno(new Date()) - inizioGiorno(d)) / MILLISECONDI_UN_GIORNO);
     if (giorni === 0) return 'oggi ' + ora;
     if (giorni === 1) return 'ieri ' + ora;
     return due(d.getDate()) + '/' + due(d.getMonth() + 1) + ' ' + ora;
@@ -91,17 +78,32 @@
 
   // ---- Bozza: il testo si salva da solo mentre si detta ----
   // Se arriva una telefonata e l'app si chiude, alla riapertura il testo è ancora lì.
+  // Sta in localStorage e non in IndexedDB perché si scrive a ogni tasto e la scrittura
+  // è immediata: anche se l'app viene chiusa un istante dopo, il testo c'è.
+  // Insieme al testo si salva quando è iniziata la nota: è quella l'ora che va in ufficio.
 
   function leggiBozza() {
     try { return localStorage.getItem(CHIAVE_BOZZA) || ''; } catch (e) { return ''; }
   }
 
+  function inizioBozza() {
+    try { return localStorage.getItem(CHIAVE_BOZZA_INIZIO) || ''; } catch (e) { return ''; }
+  }
+
   function salvaBozza(testo) {
-    try { localStorage.setItem(CHIAVE_BOZZA, testo); } catch (e) { /* memoria non disponibile */ }
+    try {
+      localStorage.setItem(CHIAVE_BOZZA, testo);
+      if (testo.trim() && !localStorage.getItem(CHIAVE_BOZZA_INIZIO)) {
+        localStorage.setItem(CHIAVE_BOZZA_INIZIO, new Date().toISOString());
+      }
+    } catch (e) { /* memoria non disponibile */ }
   }
 
   function cancellaBozza() {
-    try { localStorage.removeItem(CHIAVE_BOZZA); } catch (e) { /* memoria non disponibile */ }
+    try {
+      localStorage.removeItem(CHIAVE_BOZZA);
+      localStorage.removeItem(CHIAVE_BOZZA_INIZIO);
+    } catch (e) { /* memoria non disponibile */ }
   }
 
   // ---- Schermate ----
@@ -130,7 +132,7 @@
   // la consuma e l'app decide cosa fare, invece di chiudersi con una nota a metà.
 
   function mettiGuardia() {
-    if (stato.ignoraPop) { stato.dopoPop = mettiGuardia; return; }
+    if (stato.ignoraPop) { stato.rimettiGuardia = true; return; }
     history.pushState({ guardia: true }, '');
     stato.guardia = true;
   }
@@ -146,7 +148,7 @@
     if (stato.ignoraPop) {
       // Ritorno voluto dall'app, non dal tasto Indietro.
       stato.ignoraPop = false;
-      if (stato.dopoPop) { var poi = stato.dopoPop; stato.dopoPop = null; poi(); }
+      if (stato.rimettiGuardia) { stato.rimettiGuardia = false; mettiGuardia(); }
       return;
     }
     stato.guardia = false;
@@ -177,7 +179,7 @@
       var n = note.length;
       var problemaCodice = dati[1] === true;
       var ultimoErrore = dati[2] || 0;
-      // Nota ferma da più di un giorno con la rete che c'era e il foglio che non rispondeva:
+      // Nota ferma da più di un giorno e il foglio che ha risposto male di recente:
       // visto dal telefono è uguale a "non c'è campo", ma qui serve l'ufficio.
       var ferma = n > 0
         && Date.now() - new Date(note[0].dataOraNota).getTime() > MILLISECONDI_UN_GIORNO
@@ -191,7 +193,10 @@
       }
       el.statoInvio.textContent = testo;
       el.statoInvio.classList.toggle('stato-attesa', n > 0 || problemaCodice);
-    }).catch(function () { /* la schermata resta com'era */ });
+    }).catch(function () {
+      el.statoInvio.textContent = 'La memoria del telefono non risponde. Chiama l\'ufficio.';
+      el.statoInvio.classList.add('stato-attesa');
+    });
 
     Archivio.ultimeInviate(3).then(function (note) {
       el.ultimeElenco.textContent = '';
@@ -208,7 +213,7 @@
         el.ultimeElenco.appendChild(riga);
       });
       el.ultime.hidden = note.length === 0;
-    }).catch(function () { /* la schermata resta com'era */ });
+    }).catch(function () { /* l'elenco resta com'era */ });
   }
 
   // ---- Schermata "Racconta" ----
@@ -223,6 +228,8 @@
     aggiornaAvanti();
     el.racconta.classList.remove('con-tastiera');
     el.aiuto.hidden = true;
+    // Ogni nota riparte con il microfono dell'app: un rifiuto passeggero non lo spegne per sempre.
+    stato.erroriPermesso = 0;
     impostaMicrofono('pronto');
     mostra('racconta');
     mettiGuardia();
@@ -291,13 +298,12 @@
     return prima + ' ' + aggiunta;
   }
 
-  function scorriInFondo() { el.testo.scrollTop = el.testo.scrollHeight; }
-
+  // Mette nel testo quello che è stato capito finora (anche a metà) e lo salva nella bozza.
   function completaDettatura(base, testo) {
     el.testo.value = unisci(base, testo);
     salvaBozza(el.testo.value);
     aggiornaAvanti();
-    scorriInFondo();
+    el.testo.scrollTop = el.testo.scrollHeight;
   }
 
   // Interrompe l'ascolto quando si lascia la schermata; il testo già comparso resta.
@@ -309,12 +315,13 @@
   function toccaMicrofono() {
     vibra();
     if (Dettatura.inAscolto()) {
-      // Secondo tocco: si ferma e si aspetta il risultato finale.
+      // Un secondo tocco subito dopo il primo è quasi sempre un doppio tocco involontario.
+      if (Date.now() - stato.ascoltoDa < MILLISECONDI_ASCOLTO_MINIMO) return;
       impostaMicrofono('chiusura');
       Dettatura.ferma();
       return;
     }
-    // Senza API, senza rete o senza permesso si passa subito alla tastiera:
+    // Senza API, senza rete o con il permesso negato si passa subito alla tastiera:
     // farlo dentro il tocco è l'unico modo per far aprire la tastiera da sola.
     if (!Dettatura.disponibile() || stato.erroriPermesso >= 2 || !navigator.onLine) {
       usaTastiera();
@@ -322,13 +329,10 @@
     }
     var base = el.testo.value;
     var partito = Dettatura.avvia({
-      alTesto: function (testo) {
-        el.testo.value = unisci(base, testo);
-        aggiornaAvanti();
-        scorriInFondo();
-      },
+      alTesto: function (testo) { completaDettatura(base, testo); },
       allaFine: function (testo) {
         completaDettatura(base, testo);
+        stato.erroriPermesso = 0;
         impostaMicrofono('pronto');
       },
       allErrore: function (codice, testo) {
@@ -336,13 +340,13 @@
         if (codice === 'no-speech') { impostaMicrofono('niente'); return; }
         // "not-allowed" arriva sia col permesso negato sia col microfono occupato:
         // si rinuncia all'ascolto in-app solo se succede due volte di fila.
-        if (codice === 'not-allowed' || codice === 'service-not-allowed') stato.erroriPermesso++;
+        if (codice === 'not-allowed' || codice === 'service-not-allowed') stato.erroriPermesso += 1;
         impostaMicrofono('pronto');
         usaTastiera();
       }
     });
     if (partito) {
-      stato.erroriPermesso = 0;
+      stato.ascoltoDa = Date.now();
       impostaMicrofono('ascolto');
     } else {
       usaTastiera();
@@ -350,12 +354,6 @@
   }
 
   // ---- Schermata "Quale cantiere?" ----
-
-  function elencoCantieri() {
-    // In modalità prova l'elenco è finto; altrimenti è l'ultimo scaricato dal foglio dell'ufficio.
-    if (Coda.inProva()) return Promise.resolve(CANTIERI_FINTI);
-    return Archivio.leggi('cantieri').then(function (lista) { return lista || []; });
-  }
 
   function disegnaCantieri(nomi, uso) {
     var ordinati = nomi
@@ -381,11 +379,12 @@
     fermaDettatura();
     el.testo.blur();
     el.avviso.hidden = true;
+    // Se la memoria non si legge, la schermata si apre lo stesso: "Non so / Generale" basta a non perdere la nota.
     Promise.all([
-      elencoCantieri(),
+      Archivio.leggi('cantieri').catch(function () { return null; }),
       Archivio.leggi('usoCantieri').catch(function () { return null; })
     ]).then(function (dati) {
-      disegnaCantieri(dati[0], dati[1] || {});
+      disegnaCantieri(dati[0] || [], dati[1] || {});
       mostra('cantiere');
       el.elenco.scrollTop = 0;
     });
@@ -406,13 +405,13 @@
     stato.salvataggio = true;
     vibra();
     var nota = {
-      id: nuovoId(),
+      id: crypto.randomUUID(),
+      tipo: 'nota',
       testo: testo,
       cantiere: nome,
-      // Momento in cui la nota è stata registrata, non quello dell'invio.
-      dataOraNota: new Date().toISOString(),
-      stato: 'in_attesa',
-      tentativi: 0
+      // Momento in cui la nota è stata iniziata (non quello dell'invio, né quello del tocco finale).
+      dataOraNota: inizioBozza() || new Date().toISOString(),
+      stato: 'in_attesa'
     };
     Archivio.salvaNota(nota).then(function () {
       cancellaBozza();
@@ -423,10 +422,10 @@
     }, function () {
       // Il testo resta dov'è: può riprovare.
       el.avviso.hidden = false;
-    }).then(function () {
-      stato.salvataggio = false;
-    });
+    }).then(sbloccaSalvataggio, sbloccaSalvataggio);
   }
+
+  function sbloccaSalvataggio() { stato.salvataggio = false; }
 
   // ---- Schermata "Nota salvata" ----
 
@@ -445,6 +444,59 @@
     aggiornaHome();
   }
 
+  // ---- Collegamento con l'ufficio ----
+
+  // Il codice dell'operatore arriva una volta sola, dal link personale (…/?c=CODICE):
+  // viene salvato sul telefono e tolto dall'indirizzo solo dopo che il salvataggio è riuscito.
+  function codiceDalLink() {
+    var trovato = /[?&]c=([^&#]+)/.exec(location.search);
+    if (!trovato) return Promise.resolve();
+    var codice = decodeURIComponent(trovato[1]).trim();
+    if (!codice) return Promise.resolve();
+    return Archivio.scrivi('codiceOperatore', codice)
+      .then(function () { return Archivio.scrivi('problemaCodice', false); })
+      .then(function () {
+        try { history.replaceState(null, '', location.pathname); } catch (e) { /* non indispensabile */ }
+      })
+      .catch(function () { /* l'indirizzo resta com'è: alla prossima apertura si riprova */ });
+  }
+
+  function collegato() {
+    if (Coda.inProva()) return Promise.resolve(true);
+    return Archivio.leggi('codiceOperatore').then(function (codice) { return !!codice; });
+  }
+
+  // Quando l'app si apre o torna in primo piano: si riprova a inviare, si aggiorna l'elenco
+  // dei cantieri, si controlla se c'è una versione nuova.
+  function alRitornoInPrimoPiano() {
+    Coda.azzeraAttesa();
+    Coda.invia();
+    Coda.scaricaCantieri();
+    if (stato.schermo === 'home') aggiornaHome();
+    if (stato.schermo === 'collegamento') avvio();
+    var registrazione = stato.registrazioneSW;
+    if (registrazione && Date.now() - stato.ultimoControlloVersione > MILLISECONDI_CONTROLLO_VERSIONE) {
+      stato.ultimoControlloVersione = Date.now();
+      registrazione.update().catch(function () { /* senza rete */ });
+    }
+  }
+
+  function avvio() {
+    collegato().then(function (ok) {
+      if (!ok) {
+        mostra('collegamento');
+        return;
+      }
+      if (stato.schermo === 'collegamento') mostra('home');
+      aggiornaHome();
+      Coda.invia();
+      Coda.scaricaCantieri();
+    }).catch(function () {
+      // Memoria non leggibile: si mostra comunque la schermata iniziale con l'avviso.
+      aggiornaHome();
+    });
+  }
+
   // ---- Collegamenti ----
 
   el.nuova.addEventListener('click', apriRacconta);
@@ -457,6 +509,20 @@
   el.conferma.addEventListener('click', tornaHome);
   el.buttaNo.addEventListener('click', function () { vibra(); mostra('racconta'); });
   el.buttaSi.addEventListener('click', function () { vibra(); chiudiRacconta(); });
+
+  // La coda riparte al ritorno della rete e quando l'app torna in primo piano.
+  // Se restano note in attesa, si chiede al telefono di riprovare in background appena torna la rete.
+  Coda.alCambio = function () {
+    aggiornaHome();
+    chiediInvioInBackground();
+  };
+  window.addEventListener('online', function () { Coda.azzeraAttesa(); Coda.invia(); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) chiediInvioInBackground();
+    else alRitornoInPrimoPiano();
+  });
+  // Ad app aperta si riprova comunque ogni minuto.
+  setInterval(function () { Coda.invia(); }, MILLISECONDI_RITENTATIVO);
 
   // Tastiera del telefono: Chrome su Android dice quanto è alta (API VirtualKeyboard).
   // La schermata si accorcia di quel tanto (vedi stile.css) e il pulsante microfono
@@ -474,24 +540,6 @@
     el.testo.addEventListener('blur', function () { el.racconta.classList.remove('tastiera-aperta'); });
   }
 
-  // La coda riparte al ritorno della rete e quando l'app torna in primo piano.
-  // Si aggiorna sempre, anche se la schermata iniziale non è in vista: costa niente
-  // e così è già giusta quando ci si torna. Se restano note in attesa, si chiede
-  // al telefono di riprovare in background appena torna la rete.
-  Coda.alCambio = function () {
-    aggiornaHome();
-    chiediInvioInBackground();
-  };
-  window.addEventListener('online', function () { Coda.invia(); });
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { chiediInvioInBackground(); return; }
-    Coda.invia();
-    Coda.scaricaCantieri();
-    if (stato.schermo === 'home') aggiornaHome();
-  });
-  // Ad app aperta si riprova comunque ogni minuto.
-  setInterval(function () { Coda.invia(); }, MILLISECONDI_RITENTATIVO);
-
   // ---- Service worker: l'app si apre anche senza rete e si aggiorna da sola ----
 
   function chiediInvioInBackground() {
@@ -508,9 +556,7 @@
     // altrimenti un numero di versione nuovo potrebbe restare nascosto dalla cache per 10 minuti.
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (registrazione) {
       stato.registrazioneSW = registrazione;
-      document.addEventListener('visibilitychange', function () {
-        if (!document.hidden) registrazione.update().catch(function () { /* senza rete */ });
-      });
+      stato.ultimoControlloVersione = Date.now();
     }).catch(function () { /* senza service worker l'app funziona lo stesso, solo non si apre senza rete */ });
     navigator.serviceWorker.addEventListener('controllerchange', function () {
       // Versione nuova attiva: si ricarica solo dalla schermata iniziale, mai con una nota a metà.
@@ -524,33 +570,6 @@
     navigator.storage.persist().catch(function () { /* non indispensabile */ });
   }
 
-  // ---- Avvio ----
-
-  // Il codice dell'operatore arriva una volta sola, dal link personale (…/?c=CODICE):
-  // viene salvato sul telefono e tolto subito dall'indirizzo.
-  function codiceDalLink() {
-    var trovato = /[?&]c=([^&#]+)/.exec(location.search);
-    if (!trovato) return Promise.resolve();
-    var codice = decodeURIComponent(trovato[1]).trim();
-    try { history.replaceState(null, '', location.pathname); } catch (e) { /* non indispensabile */ }
-    if (!codice) return Promise.resolve();
-    return Archivio.scrivi('codiceOperatore', codice)
-      .then(function () { return Archivio.scrivi('problemaCodice', false); })
-      .catch(function () { /* si riproverà aprendo di nuovo il link */ });
-  }
-
   el.versione.textContent = 'v' + CONFIG.VERSIONE + (CONFIG.URL_WEB_APP ? '' : ' · prova');
-
-  codiceDalLink().then(function () {
-    if (Coda.inProva()) return true;
-    return Archivio.leggi('codiceOperatore');
-  }).then(function (collegato) {
-    if (!collegato) {
-      mostra('collegamento');
-      return;
-    }
-    aggiornaHome();
-    Coda.invia();
-    Coda.scaricaCantieri();
-  });
+  codiceDalLink().then(avvio);
 })();

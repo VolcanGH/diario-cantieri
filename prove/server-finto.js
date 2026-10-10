@@ -33,8 +33,15 @@ const TIPI = {
 
 // ---- 1. I file dell'app ----
 
-http.createServer((richiesta, risposta) => {
-  let percorso = decodeURIComponent(new URL(richiesta.url, 'http://localhost').pathname);
+const serverApp = http.createServer((richiesta, risposta) => {
+  let percorso;
+  try {
+    percorso = decodeURIComponent(new URL(richiesta.url, 'http://localhost').pathname);
+  } catch (e) {
+    risposta.writeHead(400);
+    risposta.end();
+    return;
+  }
   if (percorso.endsWith('/')) percorso += 'index.html';
   const file = path.join(RADICE, percorso);
 
@@ -61,8 +68,10 @@ http.createServer((richiesta, risposta) => {
     });
     risposta.end(contenuto);
   });
-}).listen(PORTA_APP, () => {
-  console.log('App in prova su http://localhost:' + PORTA_APP + '/app/  (backend finto: ' + URL_BACKEND + ')');
+});
+serverApp.on('error', e => { console.error('Server app: ' + e.message); process.exit(1); });
+serverApp.listen(PORTA_APP, () => {
+  console.log('App in prova su http://localhost:' + PORTA_APP + '/app/?c=' + Object.keys(OPERATORI)[0] + '  (backend finto: ' + URL_BACKEND + ')');
 });
 
 // ---- 2. Il finto backend ----
@@ -104,11 +113,13 @@ function elaboraNote(dati) {
   return { ok: true, ricevute, scartate };
 }
 
-http.createServer((richiesta, risposta) => {
+const serverBackend = http.createServer((richiesta, risposta) => {
   const url = new URL(richiesta.url, 'http://localhost');
 
   if (url.pathname.startsWith('/risposta/')) {
-    const oggetto = risposteInAttesa.get(url.pathname.slice('/risposta/'.length));
+    const token = url.pathname.slice('/risposta/'.length);
+    const oggetto = risposteInAttesa.get(token);
+    risposteInAttesa.delete(token);
     if (!oggetto) return json(risposta, 404, { ok: false, errore: 'scaduta' });
     return json(risposta, 200, oggetto);
   }
@@ -120,7 +131,8 @@ http.createServer((richiesta, risposta) => {
   if (guasto) { risposta.writeHead(500, { 'Access-Control-Allow-Origin': '*' }); return risposta.end('Errore finto'); }
 
   if (richiesta.method === 'GET') {
-    const operatore = OPERATORI[String(url.searchParams.get('c') || '').trim()];
+    // Il parametro si chiama "codice" come nel vero Apps Script ("c" lì è riservato).
+    const operatore = OPERATORI[String(url.searchParams.get('codice') || '').trim()];
     return rispondiComeAppsScript(risposta, operatore ? { ok: true, cantieri: CANTIERI } : { ok: false, errore: 'codice' });
   }
   if (richiesta.method === 'POST') {
@@ -134,4 +146,6 @@ http.createServer((richiesta, risposta) => {
     return;
   }
   json(risposta, 405, { ok: false, errore: 'metodo' });
-}).listen(PORTA_BACKEND);
+});
+serverBackend.on('error', e => { console.error('Backend finto: ' + e.message); process.exit(1); });
+serverBackend.listen(PORTA_BACKEND);

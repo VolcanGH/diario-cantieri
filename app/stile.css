@@ -149,7 +149,7 @@ body {
 
 .ultime h2 {
   margin: 0 0 4px;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -163,7 +163,7 @@ body {
   display: flex;
   gap: 8px;
   overflow: hidden;
-  font-size: 0.95rem;
+  font-size: 1rem;
   line-height: 1.5;
   white-space: nowrap;
 }
@@ -193,7 +193,7 @@ body {
 
 .icona-microfono { width: 1.9rem; height: 1.9rem; }
 
-.microfono-sotto { font-size: 0.95rem; font-weight: 500; }
+.microfono-sotto { font-size: 1rem; font-weight: 500; }
 
 /* Mentre ascolta: colore pieno, si deve capire a colpo d'occhio. */
 .btn-microfono.ascolto {
@@ -209,8 +209,9 @@ body {
   50% { opacity: 0.35; }
 }
 
-/* Con la tastiera aperta lo spazio è poco: il pulsante grande sparisce
-   (e nel ripiego lascia il posto all'aiuto). Ricompare quando la tastiera si chiude. */
+/* Con la tastiera aperta lo spazio è poco: il pulsante grande sparisce finché la tastiera
+   resta aperta (tastiera-aperta). Nel ripiego (con-tastiera) lascia il posto all'aiuto
+   per tutta la nota: si usa il microfono della tastiera fino alla nota successiva. */
 .con-tastiera .btn-microfono,
 .tastiera-aperta .btn-microfono { display: none; }
 

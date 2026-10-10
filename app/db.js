@@ -1,5 +1,6 @@
 // Diario Cantieri — memoria del telefono (IndexedDB) e coda di invio.
 // Ogni nota viene prima salvata qui e poi inviata: così non si perde mai.
+// Qui stanno anche gli appuntamenti del calendario, che invece restano solo sul telefono.
 // Questo file viene letto sia dalla pagina sia dal service worker: qui niente "window" o "document".
 
 (function (globale) {
@@ -8,8 +9,8 @@
   // Il nome ha il prefisso dell'app perché su GitHub Pages tutti i siti
   // dello stesso utente condividono la stessa memoria.
   var NOME_DB = 'diario-cantieri';
-  var VERSIONE_DB = 1;
-  var DEPOSITI = ['note', 'impostazioni'];
+  var VERSIONE_DB = 2;   // 2: aggiunto il deposito "appuntamenti" (calendario)
+  var DEPOSITI = ['note', 'impostazioni', 'appuntamenti'];
   var NOTE_INVIATE_DA_TENERE = 30;
   var NOTE_PER_INVIO = 20;
   var MILLISECONDI_ATTESA_RISPOSTA = 45000;
@@ -30,6 +31,10 @@
   //   { id, tipo: 'nota', testo, cantiere, dataOraNota, stato: 'in_attesa' | 'inviata' | 'scartata', inviataIl }
   // "inviataIl" è il momento in cui il foglio l'ha confermata: serve solo a capire cosa è successo.
   // "scartata" = il foglio l'ha rifiutata (non può succedere con le note fatte dall'app): non si riprova.
+  //
+  // Un appuntamento del calendario (resta solo sul telefono):
+  //   { chiave: '2026-10-12 08', giorno: '2026-10-12', ora: 8, testo, modificatoIl }
+  // La chiave è "giorno ora": così gli appuntamenti di un giorno si leggono con un intervallo di chiavi.
 
   // ---- IndexedDB ----
 
@@ -47,6 +52,9 @@
         if (!db.objectStoreNames.contains('impostazioni')) {
           // Coppie chiave/valore: codiceOperatore, cantieri, usoCantieri, problemaCodice, ultimoErroreInvio…
           db.createObjectStore('impostazioni', { keyPath: 'chiave' });
+        }
+        if (!db.objectStoreNames.contains('appuntamenti')) {
+          db.createObjectStore('appuntamenti', { keyPath: 'chiave' });
         }
       };
       richiesta.onsuccess = function () {
@@ -119,12 +127,6 @@
     });
   }
 
-  function ultimeInviate(quante) {
-    return leggiPerStato('inviata').then(function (note) {
-      return note.sort(perDataCrescente).reverse().slice(0, quante);
-    });
-  }
-
   // Segna le note con quegli id come "inviata" o "scartata". Si può ripetere senza danni.
   function segnaEsito(ids, stato) {
     if (!ids.length) return Promise.resolve();
@@ -176,6 +178,24 @@
       var deposito = tx.objectStore('impostazioni');
       Object.keys(valori).forEach(function (chiave) { deposito.put({ chiave: chiave, valore: valori[chiave] }); });
     });
+  }
+
+  // ---- Appuntamenti del calendario ----
+
+  // Tutti gli appuntamenti di un giorno ('2026-10-12'): le chiavi di quel giorno stanno tra "… 00" e "… 24".
+  function appuntamentiDelGiorno(giorno) {
+    return transazione('readonly', function (tx, esito) {
+      var richiesta = tx.objectStore('appuntamenti').getAll(IDBKeyRange.bound(giorno + ' 00', giorno + ' 24'));
+      richiesta.onsuccess = function () { esito.valore = richiesta.result; };
+    });
+  }
+
+  function salvaAppuntamento(appuntamento) {
+    return transazione('readwrite', function (tx) { tx.objectStore('appuntamenti').put(appuntamento); }, true);
+  }
+
+  function eliminaAppuntamento(chiave) {
+    return transazione('readwrite', function (tx) { tx.objectStore('appuntamenti').delete(chiave); }, true);
   }
 
   // ---- Collegamento con il foglio dell'ufficio ----
@@ -323,9 +343,11 @@
     salvaNota: salvaNota,
     noteInAttesa: noteInAttesa,
     contaInAttesa: contaInAttesa,
-    ultimeInviate: ultimeInviate,
     leggi: leggi,
-    scrivi: scrivi
+    scrivi: scrivi,
+    appuntamentiDelGiorno: appuntamentiDelGiorno,
+    salvaAppuntamento: salvaAppuntamento,
+    eliminaAppuntamento: eliminaAppuntamento
   };
 
   globale.Coda = {

@@ -14,19 +14,22 @@
 </head>
 <body>
 
-  <!-- 1. Schermata iniziale -->
+  <!-- 1. Schermata iniziale: due pulsanti grandi che si dividono lo schermo -->
   <section id="schermo-home" class="schermo attivo" aria-label="Inizio">
     <button id="btn-nuova" class="btn btn-principale btn-gigante" type="button">Cosa è successo?</button>
+    <button id="btn-calendario" class="btn btn-azzurro btn-gigante btn-calendario" type="button">
+      <span>Calendario</span>
+      <!-- Il prossimo appuntamento di oggi: è il promemoria dell'app. -->
+      <span id="calendario-oggi" class="calendario-oggi" hidden></span>
+    </button>
     <p id="stato-invio" class="stato" role="status">Tutto inviato ✓</p>
-    <div id="ultime" class="ultime" hidden>
-      <h2>Ultime note inviate</h2>
-      <ul id="ultime-elenco"></ul>
-    </div>
     <p id="versione" class="versione"></p>
   </section>
 
-  <!-- 2. Racconta -->
+  <!-- 2. Racconta: la stessa schermata serve per le note e per gli appuntamenti del calendario -->
   <section id="schermo-racconta" class="schermo" aria-label="Racconta">
+    <!-- Solo per gli appuntamenti: giorno e ora della casella scelta nel calendario. -->
+    <h1 id="racconta-titolo" class="titolo racconta-titolo" hidden></h1>
     <button id="btn-microfono" class="btn btn-principale btn-microfono" type="button">
       <svg class="icona icona-microfono" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path d="M12 15a4 4 0 0 0 4-4V6a4 4 0 0 0-8 0v5a4 4 0 0 0 4 4zm6-4a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.93V22h2v-3.07A8 8 0 0 0 20 11h-2z"/>
@@ -35,15 +38,19 @@
       <span id="microfono-sotto" class="microfono-sotto" hidden></span>
     </button>
     <button id="aiuto-tastiera" class="aiuto" type="button" hidden>Tocca il microfono 🎤 sulla tastiera e parla</button>
-    <textarea id="testo" aria-label="Testo della nota" lang="it" autocapitalize="sentences" autocomplete="off"
+    <textarea id="testo" aria-label="Testo" lang="it" autocapitalize="sentences" autocomplete="off"
       placeholder="Qui compare quello che dici. Puoi anche scrivere."></textarea>
-    <!-- Spento: è una nota. Acceso: è una cosa da fare per l'ufficio (finisce nel foglio "Richieste"). -->
+    <p id="racconta-avviso" class="avviso" role="alert" hidden>Qualcosa non ha funzionato. Riprova.</p>
+    <!-- Solo per le note. Spento: è una nota. Acceso: è una cosa da fare per l'ufficio (finisce nel foglio "Richieste"). -->
     <button id="btn-ufficio" class="btn btn-ufficio" type="button" aria-pressed="false">
       <span class="spunta" aria-hidden="true"></span>
       <span>Da fare per l'ufficio</span>
     </button>
+    <!-- Solo per un appuntamento già scritto. -->
+    <button id="btn-elimina" class="btn btn-elimina" type="button" hidden>Cancella l'appuntamento</button>
     <div class="barra">
       <button id="btn-annulla" class="btn btn-annulla" type="button">Annulla</button>
+      <!-- "Avanti" per le note (si passa al cantiere), "Salva" per gli appuntamenti. -->
       <button id="btn-avanti" class="btn btn-principale" type="button" disabled>Avanti</button>
     </div>
   </section>
@@ -69,6 +76,22 @@
     <p id="conferma-attesa" class="conferma-riga" hidden>Verrà inviata appena c'è campo</p>
   </section>
 
+  <!-- 5. Calendario: gli appuntamenti dell'operatore, un giorno alla volta, dal lunedì al sabato.
+       Restano solo sul telefono: in ufficio non arriva niente. -->
+  <section id="schermo-calendario" class="schermo" aria-label="Calendario">
+    <!-- In alto: freccia "giorno prima", il giorno su due righe, freccia "giorno dopo". -->
+    <div class="giorno-barra">
+      <button id="btn-giorno-prima" class="btn btn-freccia" type="button" aria-label="Giorno prima">‹</button>
+      <h1 id="giorno-titolo" class="titolo giorno-titolo"><span id="giorno-nome">Oggi</span><br><span id="giorno-data"></span></h1>
+      <button id="btn-giorno-dopo" class="btn btn-freccia" type="button" aria-label="Giorno dopo">›</button>
+    </div>
+    <!-- Una riga per ogni ora dalle 7 alle 19; il tocco apre "Racconta" per quella casella. -->
+    <div id="elenco-ore" class="elenco elenco-ore"></div>
+    <div class="piede">
+      <button id="btn-calendario-chiudi" class="btn btn-chiudi" type="button">Torna all'inizio</button>
+    </div>
+  </section>
+
   <!-- Telefono senza codice operatore: può succedere solo prima del primo collegamento -->
   <section id="schermo-collegamento" class="schermo schermo-collegamento" aria-label="Telefono non collegato">
     <h1 class="titolo titolo-centrato">Telefono non collegato</h1>
@@ -76,11 +99,11 @@
     <p class="testo-grande">Se non ce l'hai, chiama l'ufficio.</p>
   </section>
 
-  <!-- Conferma prima di buttare via una nota già scritta -->
-  <section id="schermo-butta" class="schermo" aria-label="Buttare via la nota?">
-    <h1 class="titolo titolo-centrato">Butto via quello che hai scritto?</h1>
-    <button id="btn-butta-no" class="btn btn-principale btn-gigante" type="button">No, torna alla nota</button>
-    <button id="btn-butta-si" class="btn" type="button">Sì, butta via</button>
+  <!-- Domanda sì/no a tutto schermo: buttare via il testo, cancellare un appuntamento -->
+  <section id="schermo-domanda" class="schermo" aria-label="Conferma">
+    <h1 id="domanda-titolo" class="titolo titolo-centrato">Butto via quello che hai scritto?</h1>
+    <button id="btn-domanda-no" class="btn btn-principale btn-gigante" type="button">No, torna al testo</button>
+    <button id="btn-domanda-si" class="btn" type="button">Sì, butta via</button>
   </section>
 
   <script src="config.js"></script>

@@ -9,6 +9,7 @@
   --sfondo: #FFFFFF;
   --testo: #111111;        /* su bianco 18,9:1 */
   --giallo: #FFD500;       /* testo scuro su giallo 13,3:1 */
+  --azzurro: #9FCBFF;      /* testo scuro su azzurro 11,2:1 */
   --rosso: #A80000;        /* testo bianco su rosso 7,9:1 */
   --verde: #0B5D1E;        /* testo bianco su verde 8,1:1 */
   --grigio: #595959;       /* su bianco 7,0:1 */
@@ -42,7 +43,7 @@ body {
 
 /* ---- Schermate: una alla volta, alte esattamente quanto lo schermo.
         Le parti flessibili si adattano, così la pagina non deve scorrere:
-        scorrono solo l'elenco dei cantieri e l'area di testo. ---- */
+        scorrono solo gli elenchi (cantieri, ore del calendario) e l'area di testo. ---- */
 
 .schermo {
   display: none;
@@ -120,10 +121,10 @@ body {
   outline-offset: 2px;
 }
 
+/* I pulsanti giganti si dividono in parti uguali lo spazio libero della schermata. */
 .btn-gigante {
-  flex: 1 1 auto;
-  min-height: 50vh;
-  min-height: 50dvh;
+  flex: 1 1 0;
+  min-height: 120px;
   font-size: 1.9rem;
 }
 
@@ -139,38 +140,20 @@ body {
 
 .stato-attesa { font-weight: 700; }
 
-.ultime {
-  flex: 0 1 auto;
-  min-height: 0;
+.btn-azzurro { background: var(--azzurro); }
+
+/* "Calendario": sotto il nome, in piccolo, il prossimo appuntamento di oggi. */
+.btn-calendario { flex-direction: column; gap: 6px; }
+
+.calendario-oggi {
+  display: block;
+  max-width: 100%;
   overflow: hidden;
-  padding-top: 8px;
-  border-top: 1px solid var(--linea);
-}
-
-.ultime h2 {
-  margin: 0 0 4px;
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--grigio);
-}
-
-.ultime ul { margin: 0; padding: 0; list-style: none; }
-
-/* Una riga per nota: ora e cantiere, poi l'inizio del testo. */
-.ultime li {
-  display: flex;
-  gap: 8px;
-  overflow: hidden;
-  font-size: 1rem;
-  line-height: 1.5;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 1rem;
+  font-weight: 500;
 }
-
-.ultima-capo { flex: 0 0 auto; font-weight: 700; }
-
-.ultima-testo { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; color: var(--grigio); }
 
 .versione {
   margin: 0;
@@ -180,6 +163,9 @@ body {
 }
 
 /* ---- 2. Racconta ---- */
+
+/* Giorno e ora dell'appuntamento che si sta scrivendo (solo arrivando dal calendario). */
+.racconta-titolo { font-size: 1.15rem; text-align: center; }
 
 .btn-microfono {
   flex: 0 1 auto;
@@ -289,6 +275,9 @@ body {
 
 .btn-ufficio.attivo .spunta::after { content: '✓'; }
 
+/* "Cancella l'appuntamento": in rosso, per non confonderlo con gli altri pulsanti. */
+.btn-elimina { min-height: 64px; border-color: var(--rosso); color: var(--rosso); font-size: 1.1rem; }
+
 .barra {
   display: flex;
   flex: 0 0 auto;
@@ -331,12 +320,48 @@ body {
   font-weight: 700;
 }
 
-/* "Non so / Generale" resta fisso in basso, sempre visibile. */
+/* "Non so / Generale" (e "Torna all'inizio" nel calendario) resta fisso in basso, sempre visibile. */
 .piede {
   flex: 0 0 auto;
   padding-top: 10px;
   border-top: 1px solid var(--linea);
 }
+
+/* ---- 5. Calendario ---- */
+
+/* In alto: freccia, giorno su due righe, freccia. Le frecce sono quadrate, 64px. */
+.giorno-barra { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
+
+.btn-freccia { flex: 0 0 64px; width: 64px; min-height: 64px; padding: 0 0 6px; font-size: 2rem; line-height: 1; }
+
+.giorno-titolo { flex: 1 1 auto; min-width: 0; font-size: 1.15rem; line-height: 1.25; text-align: center; }
+
+/* Le righe delle ore crescono se c'è spazio e scorrono se non ce n'è; mai più basse di 56px. */
+.elenco-ore { gap: 4px; }
+
+.riga-ora {
+  flex: 1 0 auto;
+  min-height: 56px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 4px 10px;
+  box-shadow: none;
+  font-size: 1.05rem;
+  font-weight: 500;
+  text-align: left;
+}
+
+.riga-ora .ora { flex: 0 0 3.4rem; padding: 2px 4px; border-radius: 6px; font-weight: 700; text-align: center; }
+
+.riga-ora .riga-testo { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Casella con un appuntamento: azzurra come il pulsante del calendario. */
+.riga-ora.piena { background: var(--azzurro); font-weight: 700; }
+
+/* L'ora di adesso: evidenziatore giallo sull'ora. */
+.riga-ora.adesso .ora { background: var(--giallo); }
+
+.btn-chiudi { min-height: 64px; font-size: 1.1rem; }
 
 /* ---- 4. Conferma ---- */
 

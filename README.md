@@ -12,7 +12,7 @@ Tre guide, una per chi legge:
 
 ## 1. Per l'ufficio
 
-Tutto si fa nel foglio Google **"Diario Cantieri"** (nel Drive dell'account Google dell'ufficio). Il foglio ha un menu suo, **Diario Cantieri**, in alto accanto a "Guida".
+Tutto si fa nel foglio Google **"Diario Cantieri"** (nel Drive dell'account Google dell'ufficio). Il foglio ha un menu suo, **Diario Cantieri**, in alto accanto a "Guida". Nel foglio arrivano note e richieste; il **calendario** dell'app (gli appuntamenti dell'operatore) resta sul suo telefono e qui non compare.
 
 ### Le schede del foglio
 
@@ -75,7 +75,8 @@ Da sapere:
 - Dopo una pausa nel parlato, Android ferma l'ascolto da solo: basta toccare di nuovo il microfono, il testo nuovo si accoda.
 - Se quello che ha dettato è una cosa che **deve fare l'ufficio** (ordinare, chiamare, portare…), prima di *Avanti* tocca il pulsante **Da fare per l'ufficio**: diventa scuro con la spunta. La richiesta finisce nel foglio `Richieste` invece che tra le note, e la schermata finale dice "Richiesta salvata".
 - Mentre la tastiera è aperta (per correggere una parola) il pulsante microfono sparisce per fare spazio: chiudi la tastiera e ricompare.
-- Il telefono tiene le ultime 30 note inviate (le ultime 3 si vedono nella schermata iniziale); le note in attesa restano finché non partono.
+- **Calendario** (il pulsante azzurro): gli appuntamenti dell'operatore, dal lunedì al sabato, un'ora alla volta dalle 7 alle 19. Tocca un'ora → detta o scrivi → *Salva*; per cambiarla tocca di nuovo la riga, per toglierla *Cancella l'appuntamento*. Restano **solo sul telefono** (in ufficio non arriva niente) e non suonano: il promemoria è la riga sotto "Calendario" nella schermata iniziale, che dice il prossimo appuntamento di oggi.
+- Le note inviate restano sul telefono solo per poco (le ultime 30); quelle in attesa restano finché non partono.
 
 ---
 
@@ -85,7 +86,8 @@ Da sapere:
 
 - **`app/`** — l'app sul telefono: HTML, CSS e JavaScript senza librerie né passaggi di compilazione. Pubblicata con GitHub Pages dal ramo `main` di questo repository: ogni `git push` va online in 1-2 minuti.
   - `config.js`: l'indirizzo della Web App e il **numero di versione**. È l'unico file da toccare per una pubblicazione.
-  - `app.js` schermate e navigazione · `db.js` memoria del telefono (IndexedDB) e coda di invio · `speech.js` dettatura · `sw.js` service worker (apertura senza rete, aggiornamenti automatici, invio in background).
+  - `app.js` schermate e navigazione (note e calendario) · `db.js` memoria del telefono (IndexedDB: note, impostazioni, appuntamenti del calendario) e coda di invio · `speech.js` dettatura · `sw.js` service worker (apertura senza rete, aggiornamenti automatici, invio in background).
+  - Per aggiungere un deposito in IndexedDB si alza `VERSIONE_DB` in `db.js` e lo si crea in `onupgradeneeded`: i telefoni si aggiornano da soli alla prima apertura, senza perdere niente.
 - **`apps-script/`** — il codice che gira dentro il foglio Google (Apps Script): `Code.gs` e il manifest `appsscript.json`. Riceve le note, controlla il codice dell'operatore, scarta i doppioni, crea le schede per cantiere, fa il menu.
 - **`prove/server-finto.js`** — un server locale per provare l'app sul computer senza toccare Google: `node prove/server-finto.js`, poi apri `http://localhost:8765/app/?c=PROVAPROVAPROVA1` (il codice operatore di prova). Il finto backend sta su `http://localhost:8766/exec` e risponde anche a `/stato` (note ricevute), `/azzera` (svuota) e `/guasto/on` · `/guasto/off` (simula un foglio guasto).
 - **`app/icons/icona.svg`** — il disegno dell'icona; i PNG a 192 e 512 px sono ricavati da lì.

@@ -1,5 +1,6 @@
 // Diario Cantieri — schermate e navigazione.
-// C'è un unico flusso: Inizio → Racconta → Quale cantiere? → Nota salvata → Inizio.
+// Due flussi: Inizio → Racconta → Quale cantiere? → Nota salvata → Inizio
+//          e  Inizio → Calendario → casella di un'ora → Racconta (la stessa schermata) → Calendario.
 
 (function () {
   'use strict';
@@ -8,6 +9,11 @@
   var CHIAVE_BOZZA = 'diario-cantieri:bozza';
   var CHIAVE_BOZZA_INIZIO = 'diario-cantieri:bozza-inizio';
   var CHIAVE_BOZZA_UFFICIO = 'diario-cantieri:bozza-ufficio';
+  var PRIMA_ORA = 7;        // il calendario va dalle 7…
+  var ULTIMA_ORA = 19;      // …alle 19, a caselle di un'ora (7–8, 8–9 … 18–19)
+  var DOMENICA = 0;         // getDay() della domenica: il calendario la salta
+  var GIORNI = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
+  var MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
   var MILLISECONDI_CONFERMA = 3000;
   var MILLISECONDI_ANTI_DOPPIO_TOCCO = 400;
   var MILLISECONDI_AVVISO_MICROFONO = 2500;
@@ -21,17 +27,20 @@
 
   var el = {
     nuova: $('btn-nuova'),
+    calendario: $('btn-calendario'),
+    calendarioOggi: $('calendario-oggi'),
     statoInvio: $('stato-invio'),
-    ultime: $('ultime'),
-    ultimeElenco: $('ultime-elenco'),
     versione: $('versione'),
     racconta: $('schermo-racconta'),
+    raccontaTitolo: $('racconta-titolo'),
     microfono: $('btn-microfono'),
     microfonoTesto: $('microfono-testo'),
     microfonoSotto: $('microfono-sotto'),
     aiuto: $('aiuto-tastiera'),
     testo: $('testo'),
+    raccontaAvviso: $('racconta-avviso'),
     ufficio: $('btn-ufficio'),
+    elimina: $('btn-elimina'),
     annulla: $('btn-annulla'),
     avanti: $('btn-avanti'),
     elenco: $('elenco-cantieri'),
@@ -41,8 +50,15 @@
     confermaTitolo: $('conferma-titolo'),
     confermaCantiere: $('conferma-cantiere'),
     confermaAttesa: $('conferma-attesa'),
-    buttaNo: $('btn-butta-no'),
-    buttaSi: $('btn-butta-si')
+    giornoPrima: $('btn-giorno-prima'),
+    giornoDopo: $('btn-giorno-dopo'),
+    giornoNome: $('giorno-nome'),
+    giornoData: $('giorno-data'),
+    elencoOre: $('elenco-ore'),
+    calendarioChiudi: $('btn-calendario-chiudi'),
+    domandaTitolo: $('domanda-titolo'),
+    domandaNo: $('btn-domanda-no'),
+    domandaSi: $('btn-domanda-si')
   };
 
   var stato = {
@@ -52,7 +68,12 @@
     ignoraPop: false,
     rimettiGuardia: false,
     salvataggio: false,
+    modalita: 'nota',        // cosa si sta scrivendo in "Racconta": 'nota' oppure 'appuntamento'
+    testoIniziale: '',       // testo con cui si è aperta "Racconta": se non è cambiato, Annulla non chiede niente
     perUfficio: false,
+    appuntamento: null,      // { giorno, ora } della casella aperta dal calendario
+    giorno: null,            // giorno mostrato nel calendario
+    azioneSi: null,          // cosa fare se nella schermata "domanda" si risponde sì
     timerConferma: null,
     timerMicrofono: null,
     ascoltoDa: 0,
@@ -69,22 +90,25 @@
 
   function due(n) { return (n < 10 ? '0' : '') + n; }
 
-  function inizioGiorno(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+  function maiuscola(testo) { return testo.charAt(0).toUpperCase() + testo.slice(1); }
 
-  function formattaQuando(iso) {
-    var d = new Date(iso);
-    var ora = due(d.getHours()) + ':' + due(d.getMinutes());
-    var giorni = Math.round((inizioGiorno(new Date()) - inizioGiorno(d)) / MILLISECONDI_UN_GIORNO);
-    if (giorni === 0) return 'oggi ' + ora;
-    if (giorni === 1) return 'ieri ' + ora;
-    return due(d.getDate()) + '/' + due(d.getMonth() + 1) + ' ' + ora;
-  }
+  function inizioGiorno(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
 
-  // ---- Bozza: il testo si salva da solo mentre si detta ----
+  function spostaGiorni(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+
+  // '2026-10-12': è la forma con cui i giorni sono scritti nella memoria del telefono.
+  function chiaveGiorno(d) { return d.getFullYear() + '-' + due(d.getMonth() + 1) + '-' + due(d.getDate()); }
+
+  function nomeGiorno(d) { return GIORNI[d.getDay()] + ' ' + d.getDate() + ' ' + MESI[d.getMonth()]; }
+
+  function etichettaOra(ora) { return ora + '–' + (ora + 1); }
+
+  // ---- Bozza: il testo della nota si salva da solo mentre si detta ----
   // Se arriva una telefonata e l'app si chiude, alla riapertura il testo è ancora lì.
   // Sta in localStorage e non in IndexedDB perché si scrive a ogni tasto e la scrittura
   // è immediata: anche se l'app viene chiusa un istante dopo, il testo c'è.
   // Insieme al testo si salva quando è iniziata la nota: è quella l'ora che va in ufficio.
+  // Gli appuntamenti del calendario non hanno bozza: sono corti e si riscrivono in un attimo.
 
   function leggiBozza() {
     try { return localStorage.getItem(CHIAVE_BOZZA) || ''; } catch (e) { return ''; }
@@ -150,6 +174,8 @@
   // ---- Tasto Indietro di Android ----
   // Fuori dalla schermata iniziale si tiene una "guardia" nella cronologia: il tasto Indietro
   // la consuma e l'app decide cosa fare, invece di chiudersi con una nota a metà.
+  // C'è una guardia sola per volta: la mette la prima schermata dopo l'inizio (Racconta o Calendario)
+  // e le schermate successive la riusano.
 
   function mettiGuardia() {
     if (stato.ignoraPop) { stato.rimettiGuardia = true; return; }
@@ -172,18 +198,13 @@
       return;
     }
     stato.guardia = false;
-    if (stato.schermo === 'cantiere' || stato.schermo === 'butta') {
-      mostra('racconta');
+    if (stato.schermo === 'cantiere' || stato.schermo === 'domanda') {
+      tornaARacconta();
       mettiGuardia();
     } else if (stato.schermo === 'racconta') {
-      fermaDettatura();
-      if (el.testo.value.trim()) {
-        el.testo.blur();
-        mostra('butta');
-        mettiGuardia();
-      } else {
-        chiudiRacconta();
-      }
+      annulla(true);
+    } else if (stato.schermo === 'calendario') {
+      chiudiCalendario();
     }
   });
 
@@ -218,41 +239,60 @@
       el.statoInvio.classList.add('stato-attesa');
     });
 
-    Archivio.ultimeInviate(3).then(function (note) {
-      el.ultimeElenco.textContent = '';
-      note.forEach(function (nota) {
-        var riga = document.createElement('li');
-        var capo = document.createElement('span');
-        capo.className = 'ultima-capo';
-        capo.textContent = formattaQuando(nota.dataOraNota) + ' · ' + nota.cantiere;
-        var testo = document.createElement('span');
-        testo.className = 'ultima-testo';
-        testo.textContent = (nota.tipo === 'richiesta' ? 'Da fare: ' : '') + nota.testo;
-        riga.appendChild(capo);
-        riga.appendChild(testo);
-        el.ultimeElenco.appendChild(riga);
-      });
-      el.ultime.hidden = note.length === 0;
-    }).catch(function () { /* l'elenco resta com'era */ });
+    aggiornaCalendarioOggi();
+  }
+
+  // Nel pulsante "Calendario" si legge il prossimo appuntamento di oggi (anche quello in corso):
+  // è il promemoria dell'app, perché una web app chiusa non può suonare come una sveglia.
+  function aggiornaCalendarioOggi() {
+    var adesso = new Date();
+    Archivio.appuntamentiDelGiorno(chiaveGiorno(adesso)).then(function (lista) {
+      var prossimi = lista
+        .filter(function (a) { return a.ora >= adesso.getHours(); })
+        .sort(function (a, b) { return a.ora - b.ora; });
+      if (prossimi.length) el.calendarioOggi.textContent = 'Oggi alle ' + prossimi[0].ora + ' · ' + prossimi[0].testo;
+      else el.calendarioOggi.textContent = lista.length ? 'Oggi niente altro' : 'Oggi niente in programma';
+      el.calendarioOggi.hidden = false;
+    }).catch(function () { el.calendarioOggi.hidden = true; });
   }
 
   // ---- Schermata "Racconta" ----
+  // Serve a due cose: scrivere una nota (poi si sceglie il cantiere) e scrivere un appuntamento
+  // (poi si torna al calendario). "stato.modalita" dice quale delle due.
 
   function aggiornaAvanti() {
     el.avanti.disabled = !el.testo.value.trim();
   }
 
-  function apriRacconta() {
-    vibra();
-    el.testo.value = leggiBozza();
-    impostaPerUfficio(bozzaPerUfficio());
+  // A ogni modifica del testo: la nota salva la bozza, l'appuntamento no.
+  function testoCambiato() {
+    if (stato.modalita === 'nota') salvaBozza(el.testo.value);
+    aggiornaAvanti();
+  }
+
+  // Parte comune all'apertura di "Racconta".
+  function preparaRacconta() {
     aggiornaAvanti();
     el.racconta.classList.remove('con-tastiera');
     el.aiuto.hidden = true;
-    // Ogni nota riparte con il microfono dell'app: un rifiuto passeggero non lo spegne per sempre.
+    el.raccontaAvviso.hidden = true;
+    // Ogni volta si riparte con il microfono dell'app: un rifiuto passeggero non lo spegne per sempre.
     stato.erroriPermesso = 0;
     impostaMicrofono('pronto');
     mostra('racconta');
+  }
+
+  function apriRacconta() {
+    vibra();
+    stato.modalita = 'nota';
+    stato.testoIniziale = '';
+    el.raccontaTitolo.hidden = true;
+    el.ufficio.hidden = false;
+    el.elimina.hidden = true;
+    el.avanti.textContent = 'Avanti';
+    el.testo.value = leggiBozza();
+    impostaPerUfficio(bozzaPerUfficio());
+    preparaRacconta();
     mettiGuardia();
   }
 
@@ -266,26 +306,40 @@
     try { el.testo.setSelectionRange(fine, fine); } catch (e) { /* non indispensabile */ }
   }
 
+  // Si lascia "Racconta": la nota torna all'inizio, l'appuntamento torna al calendario.
   function chiudiRacconta() {
     fermaDettatura();
-    cancellaBozza();
     el.testo.value = '';
     el.testo.blur();
-    togliGuardia();
-    mostra('home');
-    aggiornaHome();
+    if (stato.modalita === 'appuntamento') {
+      mostra('calendario');
+      // Arrivando dal tasto Indietro la guardia è stata consumata: va rimessa.
+      if (!stato.guardia) mettiGuardia();
+      disegnaGiorno();
+    } else {
+      cancellaBozza();
+      togliGuardia();
+      mostra('home');
+      aggiornaHome();
+    }
   }
 
-  function annulla() {
-    vibra();
+  // "Annulla" o il tasto Indietro: se c'è del testo nuovo si chiede conferma prima di buttarlo via.
+  function annulla(daIndietro) {
+    if (!daIndietro) vibra();
     fermaDettatura();
-    if (el.testo.value.trim()) {
-      // C'è del testo: prima di buttarlo via si chiede conferma.
+    var testo = el.testo.value.trim();
+    if (testo && testo !== stato.testoIniziale) {
       el.testo.blur();
-      mostra('butta');
+      chiedi('Butto via quello che hai scritto?', 'No, torna al testo', 'Sì, butta via', chiudiRacconta);
     } else {
       chiudiRacconta();
     }
+  }
+
+  function avanti() {
+    if (stato.modalita === 'appuntamento') salvaAppuntamento();
+    else apriCantieri();
   }
 
   // ---- Dettatura ----
@@ -308,8 +362,6 @@
     }
   }
 
-  function maiuscola(testo) { return testo.charAt(0).toUpperCase() + testo.slice(1); }
-
   // Accoda il testo dettato a quello già presente, con lo spazio e la maiuscola giusti.
   function unisci(base, aggiunta) {
     if (!aggiunta) return base;
@@ -319,11 +371,10 @@
     return prima + ' ' + aggiunta;
   }
 
-  // Mette nel testo quello che è stato capito finora (anche a metà) e lo salva nella bozza.
+  // Mette nel testo quello che è stato capito finora (anche a metà).
   function completaDettatura(base, testo) {
     el.testo.value = unisci(base, testo);
-    salvaBozza(el.testo.value);
-    aggiornaAvanti();
+    testoCambiato();
     el.testo.scrollTop = el.testo.scrollHeight;
   }
 
@@ -467,6 +518,161 @@
     aggiornaHome();
   }
 
+  // ---- Schermata "domanda": un sì o un no a tutto schermo ----
+
+  function chiedi(titolo, testoNo, testoSi, seSi) {
+    el.domandaTitolo.textContent = titolo;
+    el.domandaNo.textContent = testoNo;
+    el.domandaSi.textContent = testoSi;
+    stato.azioneSi = seSi;
+    mostra('domanda');
+    if (!stato.guardia) mettiGuardia();
+  }
+
+  function tornaARacconta() {
+    stato.azioneSi = null;
+    mostra('racconta');
+  }
+
+  function rispondiSi() {
+    vibra();
+    var azione = stato.azioneSi;
+    stato.azioneSi = null;
+    if (azione) azione();
+  }
+
+  // ---- Calendario ----
+  // Gli appuntamenti dell'operatore: dal lunedì al sabato, caselle di un'ora dalle 7 alle 19.
+  // Restano solo sul telefono (IndexedDB), in ufficio non arriva niente.
+
+  // La domenica non c'è: si passa al lunedì.
+  function giornoDiCalendario(d) {
+    return d.getDay() === DOMENICA ? spostaGiorni(d, 1) : d;
+  }
+
+  function apriCalendario() {
+    vibra();
+    stato.giorno = giornoDiCalendario(inizioGiorno(new Date()));
+    mostra('calendario');
+    mettiGuardia();
+    disegnaGiorno();
+  }
+
+  function chiudiCalendario() {
+    togliGuardia();
+    mostra('home');
+    aggiornaHome();
+  }
+
+  function cambiaGiorno(passo) {
+    vibra();
+    var nuovo = spostaGiorni(stato.giorno, passo);
+    if (nuovo.getDay() === DOMENICA) nuovo = spostaGiorni(nuovo, passo);
+    stato.giorno = nuovo;
+    disegnaGiorno();
+  }
+
+  // Intestazione su due righe: "Oggi · sabato" (o "Lunedì") e sotto "10 ottobre".
+  function intestazioneGiorno(d) {
+    var distanza = Math.round((d - inizioGiorno(new Date())) / MILLISECONDI_UN_GIORNO);
+    var nome = GIORNI[d.getDay()];
+    if (distanza === 0) nome = 'Oggi · ' + nome;
+    else if (distanza === 1) nome = 'Domani · ' + nome;
+    else if (distanza === -1) nome = 'Ieri · ' + nome;
+    else nome = maiuscola(nome);
+    return { nome: nome, data: d.getDate() + ' ' + MESI[d.getMonth()] };
+  }
+
+  function rigaOra(ora, testo, adesso) {
+    var riga = document.createElement('button');
+    riga.type = 'button';
+    riga.className = 'btn riga-ora' + (testo ? ' piena' : '') + (adesso ? ' adesso' : '');
+    var etichetta = document.createElement('span');
+    etichetta.className = 'ora';
+    etichetta.textContent = etichettaOra(ora);
+    var contenuto = document.createElement('span');
+    contenuto.className = 'riga-testo';
+    contenuto.textContent = testo;
+    riga.appendChild(etichetta);
+    riga.appendChild(contenuto);
+    riga.addEventListener('click', function () { apriAppuntamento(ora, testo); });
+    return riga;
+  }
+
+  // Disegna il giorno scelto: una riga per ora, con il testo dell'appuntamento se c'è.
+  function disegnaGiorno() {
+    var giorno = stato.giorno;
+    var capo = intestazioneGiorno(giorno);
+    el.giornoNome.textContent = capo.nome;
+    el.giornoData.textContent = capo.data;
+    el.elencoOre.textContent = '';
+    Archivio.appuntamentiDelGiorno(chiaveGiorno(giorno)).catch(function () { return []; }).then(function (lista) {
+      if (giorno !== stato.giorno) return;   // nel frattempo si è passati a un altro giorno
+      var testi = {};
+      lista.forEach(function (a) { testi[a.ora] = a.testo; });
+      var adesso = new Date();
+      var oraAdesso = chiaveGiorno(giorno) === chiaveGiorno(adesso) ? adesso.getHours() : -1;
+      var rigaAdesso = null;
+      el.elencoOre.textContent = '';
+      for (var ora = PRIMA_ORA; ora < ULTIMA_ORA; ora++) {
+        var riga = rigaOra(ora, testi[ora] || '', ora === oraAdesso);
+        el.elencoOre.appendChild(riga);
+        if (ora === oraAdesso) rigaAdesso = riga;
+      }
+      // Oggi l'ora di adesso deve essere in vista anche se l'elenco scorre.
+      if (rigaAdesso) rigaAdesso.scrollIntoView({ block: 'nearest' });
+      else el.elencoOre.scrollTop = 0;
+    });
+  }
+
+  // Tocco su una casella: si apre "Racconta" per quell'ora (vuota o con il testo da cambiare).
+  function apriAppuntamento(ora, testo) {
+    vibra();
+    stato.modalita = 'appuntamento';
+    stato.appuntamento = { giorno: stato.giorno, ora: ora };
+    stato.testoIniziale = testo;
+    el.raccontaTitolo.textContent = maiuscola(nomeGiorno(stato.giorno)) + ' · ' + etichettaOra(ora);
+    el.raccontaTitolo.hidden = false;
+    el.ufficio.hidden = true;
+    el.elimina.hidden = !testo;
+    el.avanti.textContent = 'Salva';
+    el.testo.value = testo;
+    preparaRacconta();
+    // Niente guardia nuova: c'è già quella del calendario, e il tasto Indietro riporta lì.
+  }
+
+  function salvaAppuntamento() {
+    var testo = el.testo.value.trim();
+    if (stato.salvataggio || !testo) return;
+    stato.salvataggio = true;
+    vibra();
+    fermaDettatura();
+    var a = stato.appuntamento;
+    Archivio.salvaAppuntamento({
+      chiave: chiaveGiorno(a.giorno) + ' ' + due(a.ora),
+      giorno: chiaveGiorno(a.giorno),
+      ora: a.ora,
+      testo: testo,
+      modificatoIl: new Date().toISOString()
+    }).then(chiudiRacconta, function () {
+      // Il testo resta dov'è: può riprovare.
+      el.raccontaAvviso.hidden = false;
+    }).then(sbloccaSalvataggio, sbloccaSalvataggio);
+  }
+
+  function eliminaAppuntamento() {
+    vibra();
+    fermaDettatura();
+    el.testo.blur();
+    chiedi('Cancello l\'appuntamento?', 'No, lascialo', 'Sì, cancella', function () {
+      var a = stato.appuntamento;
+      Archivio.eliminaAppuntamento(chiaveGiorno(a.giorno) + ' ' + due(a.ora)).then(chiudiRacconta, function () {
+        tornaARacconta();
+        el.raccontaAvviso.hidden = false;
+      });
+    });
+  }
+
   // ---- Collegamento con l'ufficio ----
 
   // Il codice dell'operatore arriva una volta sola, dal link personale (…/?c=CODICE):
@@ -496,6 +702,7 @@
     Coda.invia();
     Coda.scaricaCantieri();
     if (stato.schermo === 'home') aggiornaHome();
+    if (stato.schermo === 'calendario') disegnaGiorno();   // intanto può essere cambiata l'ora, o il giorno
     if (stato.schermo === 'collegamento') avvio();
     var registrazione = stato.registrazioneSW;
     if (registrazione && Date.now() - stato.ultimoControlloVersione > MILLISECONDI_CONTROLLO_VERSIONE) {
@@ -523,19 +730,24 @@
   // ---- Collegamenti ----
 
   el.nuova.addEventListener('click', apriRacconta);
+  el.calendario.addEventListener('click', apriCalendario);
   el.microfono.addEventListener('click', toccaMicrofono);
   el.aiuto.addEventListener('click', usaTastiera);
-  el.testo.addEventListener('input', function () { salvaBozza(el.testo.value); aggiornaAvanti(); });
+  el.testo.addEventListener('input', testoCambiato);
   el.ufficio.addEventListener('click', function () { vibra(); impostaPerUfficio(!stato.perUfficio); });
   // Toccandolo mentre la tastiera è aperta, il testo non perde il fuoco: la tastiera resta aperta
   // e si può continuare a scrivere o dettare (il fuoco si sposta con mousedown, che qui si annulla).
   el.ufficio.addEventListener('mousedown', function (evento) { evento.preventDefault(); });
-  el.annulla.addEventListener('click', annulla);
-  el.avanti.addEventListener('click', apriCantieri);
+  el.elimina.addEventListener('click', eliminaAppuntamento);
+  el.annulla.addEventListener('click', function () { annulla(false); });
+  el.avanti.addEventListener('click', avanti);
   el.generale.addEventListener('click', function () { scegliCantiere(GENERALE); });
   el.conferma.addEventListener('click', tornaHome);
-  el.buttaNo.addEventListener('click', function () { vibra(); mostra('racconta'); });
-  el.buttaSi.addEventListener('click', function () { vibra(); chiudiRacconta(); });
+  el.domandaNo.addEventListener('click', function () { vibra(); tornaARacconta(); });
+  el.domandaSi.addEventListener('click', rispondiSi);
+  el.giornoPrima.addEventListener('click', function () { cambiaGiorno(-1); });
+  el.giornoDopo.addEventListener('click', function () { cambiaGiorno(1); });
+  el.calendarioChiudi.addEventListener('click', function () { vibra(); chiudiCalendario(); });
 
   // La coda riparte al ritorno della rete e quando l'app torna in primo piano.
   // Se restano note in attesa, si chiede al telefono di riprovare in background appena torna la rete.

@@ -19,6 +19,8 @@ Tutto si fa nel foglio Google **"Diario Cantieri"** (nel Drive dell'account Goog
 | Scheda | Cosa contiene | Si modifica a mano? |
 |---|---|---|
 | `Segnalazioni` | Tutte le note, una per riga, in ordine di arrivo | Sì: solo le colonne `cantiere`, `testo_corretto` e `letto` |
+| `Richieste` | Le cose da fare che l'operatore chiede all'ufficio | Sì: `accettata_da`, `fatto`, `note_ufficio` (e `cantiere`) |
+| `Persone` | I nomi di chi in ufficio accetta le richieste | Sì, uno per riga |
 | `Cantieri` | L'elenco dei cantieri: `nome`, `attivo`, `note` | Sì, è l'ufficio che lo tiene aggiornato |
 | Una scheda per cantiere (es. `Rossi`) | Le note di quel cantiere, dalla più recente | **No**: è una formula che legge `Segnalazioni` |
 | `Config` | Due impostazioni (vedi sotto) | Solo se serve |
@@ -33,6 +35,10 @@ Tutto si fa nel foglio Google **"Diario Cantieri"** (nel Drive dell'account Goog
 **Una nota è finita in "Generale" (o nel cantiere sbagliato).** In `Segnalazioni`, nella riga della nota, cambia la cella `cantiere` con la tendina. La nota si sposta da sola nella scheda giusta; se quel cantiere non aveva ancora la scheda, nasce in quel momento.
 
 **Segnare una nota come letta.** In `Segnalazioni`, spunta la casella `letto`.
+
+**Una richiesta dell'operatore ("da fare per l'ufficio").** Arriva nel foglio `Richieste`, con cantiere e testo. Chi se ne occupa sceglie il **proprio nome** nella tendina `accettata_da`: la data di accettazione si scrive da sola. Quando è fatta, spunta `fatto`; in `note_ufficio` si può annotare cosa è stato fatto. I nomi della tendina sono quelli scritti nel foglio `Persone`.
+
+**Una richiesta è finita tra le note (o una nota tra le richieste).** Seleziona una cella della riga e usa il menu **Diario Cantieri → Sposta la riga in Richieste** (o *…in Segnalazioni*): la riga passa nell'altro foglio con data, operatore, cantiere e testo.
 
 **Correggere un testo.** Scrivi la versione corretta in `testo_corretto`, mai in `testo_originale`: l'originale è quello che l'operatore ha detto davvero e va conservato.
 
@@ -67,6 +73,7 @@ Da sapere:
 - **Non cancellare i dati di Chrome** sul telefono: sparirebbero il collegamento all'ufficio e le note non ancora inviate. In quel caso basta riaprire il link personale.
 - Le versioni nuove dell'app arrivano da sole, senza reinstallare nulla. Il numero in basso nella schermata iniziale (es. `v6`) dice quale versione gira.
 - Dopo una pausa nel parlato, Android ferma l'ascolto da solo: basta toccare di nuovo il microfono, il testo nuovo si accoda.
+- Se quello che ha dettato è una cosa che **deve fare l'ufficio** (ordinare, chiamare, portare…), prima di *Avanti* tocca il pulsante **Da fare per l'ufficio**: diventa scuro con la spunta. La richiesta finisce nel foglio `Richieste` invece che tra le note, e la schermata finale dice "Richiesta salvata".
 - Mentre la tastiera è aperta (per correggere una parola) il pulsante microfono sparisce per fare spazio: chiudi la tastiera e ricompare.
 - Il telefono tiene le ultime 30 note inviate (le ultime 3 si vedono nella schermata iniziale); le note in attesa restano finché non partono.
 
@@ -89,7 +96,7 @@ Il dialogo telefono ↔ foglio è tutto qui:
 - `GET  …/exec?codice=CODICE` → `{ "ok": true, "cantieri": [...] }`
 - `POST …/exec` con corpo JSON `{ "codice", "note": [{ "id", "dataOraNota", "cantiere", "testo", "tipo" }] }` → `{ "ok": true, "ricevute": [id…], "scartate": [id…] }`
 
-Il telefono segna "inviata" solo una nota il cui `id` torna in `ricevute`: per questo un invio interrotto a metà non perde né duplica niente (il foglio scarta gli `id` già presenti). Gli `id` in `scartate` (note che il foglio rifiuta: non può succedere con le note fatte dall'app) vengono messi da parte e non ritentati. Il campo `tipo` vale sempre `"nota"` ed è salvato anche sul telefono: un modulo futuro userà un altro valore, e lo script lo smisterà sul suo foglio.
+Il telefono segna "inviata" solo una nota il cui `id` torna in `ricevute`: per questo un invio interrotto a metà non perde né duplica niente (il foglio scarta gli `id` già presenti). Gli `id` in `scartate` (note che il foglio rifiuta: non può succedere con le note fatte dall'app) vengono messi da parte e non ritentati. Il campo `tipo` vale `"nota"` (→ `Segnalazioni`) o `"richiesta"` (→ `Richieste`, l'interruttore "Da fare per l'ufficio"): lo script smista per tipo con la tabella `TIPI` in `Code.gs`, dove un modulo futuro aggiunge una riga.
 
 ### Pubblicare una modifica dell'app
 

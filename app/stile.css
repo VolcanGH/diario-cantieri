@@ -256,6 +256,40 @@ body {
 
 #testo::placeholder { color: var(--grigio); opacity: 1; }
 
+/* Interruttore "Da fare per l'ufficio": spento = nota, acceso (scuro, con la spunta) = richiesta. */
+.btn-ufficio {
+  justify-content: flex-start;
+  gap: 14px;
+  min-height: 64px;
+  padding-left: 14px;
+  font-size: 1.1rem;
+  text-align: left;
+}
+
+.spunta {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--testo);
+  border-radius: 6px;
+  background: #FFFFFF;
+  color: var(--testo);
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.btn-ufficio.attivo { border-color: var(--testo); background: var(--testo); color: #FFFFFF; }
+
+.btn-ufficio.attivo .spunta { border-color: var(--giallo); background: var(--giallo); }
+
+.btn-ufficio.attivo .spunta::after { content: '✓'; }
+
+/* Con la tastiera aperta anche l'interruttore lascia il posto al testo. */
+.tastiera-aperta .btn-ufficio { display: none; }
+
 .barra {
   display: flex;
   flex: 0 0 auto;

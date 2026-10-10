@@ -108,7 +108,8 @@ function elaboraNote(dati) {
     if (!/^[0-9a-f-]{36}$/.test(id) || !String(nota.testo || '').trim()) { if (id) scartate.push(id); continue; }
     ricevute.push(id);
     if (note.some(n => n.id === id)) continue;   // doppione: già arrivata
-    note.push({ id, dataOraNota: nota.dataOraNota, dataOraRicezione: new Date().toISOString(), operatore, cantiere: nota.cantiere || 'Generale', testo: nota.testo });
+    // "nota" o "richiesta": nel vero foglio finiscono in due schede diverse.
+    note.push({ id, tipo: nota.tipo || 'nota', dataOraNota: nota.dataOraNota, dataOraRicezione: new Date().toISOString(), operatore, cantiere: nota.cantiere || 'Generale', testo: nota.testo });
   }
   return { ok: true, ricevute, scartate };
 }

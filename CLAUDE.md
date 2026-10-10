@@ -131,6 +131,11 @@ README.md            → guida di installazione per non tecnici
 - [ ] Leggibilità al sole, con il telefono a luminosità media
 - [ ] Prova reale con l'operatore: completa una nota da solo, senza aiuto, in meno di 30 secondi
 
+## Aggiunte approvate dopo la prima versione
+
+- **Richieste all'ufficio (ottobre 2026).** Nella schermata "Racconta" c'è un interruttore **"Da fare per l'ufficio"**, spento di default. Acceso, la registrazione ha `tipo = "richiesta"` e lo script la mette nel foglio **`Richieste`** (colonne: `id | data_ora_richiesta | data_ora_ricezione | operatore | cantiere | richiesta | accettata_da | data_accettazione | fatto | note_ufficio`) invece che in `Segnalazioni`. Chi in ufficio la accetta sceglie il proprio nome nella tendina `accettata_da` (nomi nel foglio `Persone`); la data di accettazione si compila da sola. Le richieste non compaiono nei fogli per cantiere e non hanno scadenza. Dal menu si può spostare una riga tra `Segnalazioni` e `Richieste`.
+- Il parametro della chiamata GET si chiama `codice` (in Apps Script `c` è riservato); i fogli per cantiere usano `SORT(CHOOSECOLS(FILTER(…)))` invece di `QUERY`; il microfono è solo "tocca per parlare / tocca per fermare".
+
 ## Idee per una fase 2 (NON implementare senza richiesta)
 - Pulsante "È urgente" che invia subito un'email all'ufficio.
 - Riepilogo giornaliero via email all'ufficio con le note del giorno, divise per cantiere.

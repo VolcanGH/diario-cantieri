@@ -7,6 +7,7 @@
   var GENERALE = 'Generale';
   var CHIAVE_BOZZA = 'diario-cantieri:bozza';
   var CHIAVE_BOZZA_INIZIO = 'diario-cantieri:bozza-inizio';
+  var CHIAVE_BOZZA_UFFICIO = 'diario-cantieri:bozza-ufficio';
   var MILLISECONDI_CONFERMA = 3000;
   var MILLISECONDI_ANTI_DOPPIO_TOCCO = 400;
   var MILLISECONDI_AVVISO_MICROFONO = 2500;
@@ -30,12 +31,14 @@
     microfonoSotto: $('microfono-sotto'),
     aiuto: $('aiuto-tastiera'),
     testo: $('testo'),
+    ufficio: $('btn-ufficio'),
     annulla: $('btn-annulla'),
     avanti: $('btn-avanti'),
     elenco: $('elenco-cantieri'),
     avviso: $('avviso-cantiere'),
     generale: $('btn-generale'),
     conferma: $('schermo-conferma'),
+    confermaTitolo: $('conferma-titolo'),
     confermaCantiere: $('conferma-cantiere'),
     confermaAttesa: $('conferma-attesa'),
     buttaNo: $('btn-butta-no'),
@@ -49,6 +52,7 @@
     ignoraPop: false,
     rimettiGuardia: false,
     salvataggio: false,
+    perUfficio: false,
     timerConferma: null,
     timerMicrofono: null,
     ascoltoDa: 0,
@@ -103,7 +107,23 @@
     try {
       localStorage.removeItem(CHIAVE_BOZZA);
       localStorage.removeItem(CHIAVE_BOZZA_INIZIO);
+      localStorage.removeItem(CHIAVE_BOZZA_UFFICIO);
     } catch (e) { /* memoria non disponibile */ }
+  }
+
+  // L'interruttore "Da fare per l'ufficio" fa parte della bozza: se l'app si chiude a metà, si ritrova acceso.
+  function impostaPerUfficio(acceso) {
+    stato.perUfficio = !!acceso;
+    el.ufficio.classList.toggle('attivo', stato.perUfficio);
+    el.ufficio.setAttribute('aria-pressed', stato.perUfficio ? 'true' : 'false');
+    try {
+      if (stato.perUfficio) localStorage.setItem(CHIAVE_BOZZA_UFFICIO, '1');
+      else localStorage.removeItem(CHIAVE_BOZZA_UFFICIO);
+    } catch (e) { /* memoria non disponibile */ }
+  }
+
+  function bozzaPerUfficio() {
+    try { return localStorage.getItem(CHIAVE_BOZZA_UFFICIO) === '1'; } catch (e) { return false; }
   }
 
   // ---- Schermate ----
@@ -207,7 +227,7 @@
         capo.textContent = formattaQuando(nota.dataOraNota) + ' · ' + nota.cantiere;
         var testo = document.createElement('span');
         testo.className = 'ultima-testo';
-        testo.textContent = nota.testo;
+        testo.textContent = (nota.tipo === 'richiesta' ? 'Da fare: ' : '') + nota.testo;
         riga.appendChild(capo);
         riga.appendChild(testo);
         el.ultimeElenco.appendChild(riga);
@@ -225,6 +245,7 @@
   function apriRacconta() {
     vibra();
     el.testo.value = leggiBozza();
+    impostaPerUfficio(bozzaPerUfficio());
     aggiornaAvanti();
     el.racconta.classList.remove('con-tastiera');
     el.aiuto.hidden = true;
@@ -406,7 +427,8 @@
     vibra();
     var nota = {
       id: crypto.randomUUID(),
-      tipo: 'nota',
+      // "nota" va in Segnalazioni; "richiesta" (da fare per l'ufficio) va in Richieste.
+      tipo: stato.perUfficio ? 'richiesta' : 'nota',
       testo: testo,
       cantiere: nome,
       // Momento in cui la nota è stata iniziata (non quello dell'invio, né quello del tocco finale).
@@ -417,7 +439,7 @@
       cancellaBozza();
       el.testo.value = '';
       if (nome !== GENERALE) segnaUso(nome);
-      mostraConferma(nome);
+      mostraConferma(nome, nota.tipo);
       Coda.invia();
     }, function () {
       // Il testo resta dov'è: può riprovare.
@@ -429,7 +451,8 @@
 
   // ---- Schermata "Nota salvata" ----
 
-  function mostraConferma(nome) {
+  function mostraConferma(nome, tipo) {
+    el.confermaTitolo.textContent = tipo === 'richiesta' ? 'Richiesta salvata' : 'Nota salvata';
     el.confermaCantiere.textContent = 'Cantiere: ' + nome;
     el.confermaAttesa.hidden = navigator.onLine;
     mostra('conferma');
@@ -503,6 +526,7 @@
   el.microfono.addEventListener('click', toccaMicrofono);
   el.aiuto.addEventListener('click', usaTastiera);
   el.testo.addEventListener('input', function () { salvaBozza(el.testo.value); aggiornaAvanti(); });
+  el.ufficio.addEventListener('click', function () { vibra(); impostaPerUfficio(!stato.perUfficio); });
   el.annulla.addEventListener('click', annulla);
   el.avanti.addEventListener('click', apriCantieri);
   el.generale.addEventListener('click', function () { scegliCantiere(GENERALE); });

@@ -37,6 +37,11 @@
     <button id="aiuto-tastiera" class="aiuto" type="button" hidden>Tocca il microfono 🎤 sulla tastiera e parla</button>
     <textarea id="testo" aria-label="Testo della nota" lang="it" autocapitalize="sentences" autocomplete="off"
       placeholder="Qui compare quello che dici. Puoi anche scrivere."></textarea>
+    <!-- Spento: è una nota. Acceso: è una cosa da fare per l'ufficio (finisce nel foglio "Richieste"). -->
+    <button id="btn-ufficio" class="btn btn-ufficio" type="button" aria-pressed="false">
+      <span class="spunta" aria-hidden="true"></span>
+      <span>Da fare per l'ufficio</span>
+    </button>
     <div class="barra">
       <button id="btn-annulla" class="btn btn-annulla" type="button">Annulla</button>
       <button id="btn-avanti" class="btn btn-principale" type="button" disabled>Avanti</button>
@@ -59,7 +64,7 @@
       <circle cx="12" cy="12" r="11" fill="none" stroke="currentColor" stroke-width="1.4"/>
       <path d="M6.5 12.5l3.5 3.5 7.5-8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
-    <p class="conferma-titolo">Nota salvata</p>
+    <p id="conferma-titolo" class="conferma-titolo">Nota salvata</p>
     <p id="conferma-cantiere" class="conferma-riga"></p>
     <p id="conferma-attesa" class="conferma-riga" hidden>Verrà inviata appena c'è campo</p>
   </section>

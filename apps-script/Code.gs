@@ -4,35 +4,51 @@
 // Pubblicato come Web App ("Esegui come: me", "Accesso: chiunque"):
 //   GET  …/exec?codice=CODICE → { ok: true, cantieri: [...] }               elenco dei cantieri attivi
 //   (il nome "c" NON si può usare: per Apps Script è riservato e la chiamata risponde "file non trovato")
-//   POST …/exec            → { ok: true, ricevute: [id...], scartate: [] }   riceve una o più note
+//   POST …/exec            → { ok: true, ricevute: [id...], scartate: [] }   riceve una o più registrazioni
+// Ogni registrazione ha un "tipo": "nota" (va in Segnalazioni) o "richiesta" (da fare per l'ufficio, va in Richieste).
 // Ogni richiesta porta il codice segreto dell'operatore, controllato nel foglio nascosto "Operatori".
-// Nel foglio c'è il menu "Diario Cantieri": "Prepara il foglio" e "Nuovo operatore…".
+// Nel foglio c'è il menu "Diario Cantieri".
 
 var NOME_CANTIERI = 'Cantieri';
 var NOME_SEGNALAZIONI = 'Segnalazioni';
+var NOME_RICHIESTE = 'Richieste';
+var NOME_PERSONE = 'Persone';
 var NOME_OPERATORI = 'Operatori';
 var NOME_CONFIG = 'Config';
 var GENERALE = 'Generale';
 
-var FOGLI_DI_SISTEMA = [NOME_CANTIERI, NOME_SEGNALAZIONI, NOME_OPERATORI, NOME_CONFIG];
+var FOGLI_DI_SISTEMA = [NOME_CANTIERI, NOME_SEGNALAZIONI, NOME_RICHIESTE, NOME_PERSONE, NOME_OPERATORI, NOME_CONFIG];
 
 var INTESTAZIONI = {};
 INTESTAZIONI[NOME_CANTIERI] = ['nome', 'attivo', 'note'];
 INTESTAZIONI[NOME_SEGNALAZIONI] = ['id', 'data_ora_nota', 'data_ora_ricezione', 'operatore', 'cantiere',
   'testo_originale', 'testo_corretto', 'stato_correzione', 'letto'];
+INTESTAZIONI[NOME_RICHIESTE] = ['id', 'data_ora_richiesta', 'data_ora_ricezione', 'operatore', 'cantiere',
+  'richiesta', 'accettata_da', 'data_accettazione', 'fatto', 'note_ufficio'];
+INTESTAZIONI[NOME_PERSONE] = ['nome'];
 INTESTAZIONI[NOME_OPERATORI] = ['codice', 'nome', 'attivo'];
 INTESTAZIONI[NOME_CONFIG] = ['chiave', 'valore', 'note'];
 
-// Numero di colonna (1 = A) di ogni intestazione di "Segnalazioni": il codice non usa numeri a memoria,
+// Numero di colonna (1 = A) di ogni intestazione, foglio per foglio: il codice non usa numeri a memoria,
 // così aggiungere una colonna in futuro non rompe niente.
-var COL = {};
-INTESTAZIONI[NOME_SEGNALAZIONI].forEach(function (nome, i) { COL[nome] = i + 1; });
+var COLONNE = {};
+Object.keys(INTESTAZIONI).forEach(function (nomeFoglio) {
+  COLONNE[nomeFoglio] = {};
+  INTESTAZIONI[nomeFoglio].forEach(function (intestazione, i) { COLONNE[nomeFoglio][intestazione] = i + 1; });
+});
+var COL = COLONNE[NOME_SEGNALAZIONI];
+
+// Dove finisce ogni tipo di registrazione e quali colonne usa.
+var TIPI = {
+  nota: { foglio: NOME_SEGNALAZIONI, colonnaData: 'data_ora_nota', colonnaTesto: 'testo_originale', colonnaCasella: 'letto' },
+  richiesta: { foglio: NOME_RICHIESTE, colonnaData: 'data_ora_richiesta', colonnaTesto: 'richiesta', colonnaCasella: 'fatto' }
+};
 
 var MAX_NOTE_PER_RICHIESTA = 50;
 var MAX_LUNGHEZZA_TESTO = 20000;
 var MAX_LUNGHEZZA_CANTIERE = 100;
 var RIGHE_CASELLE = 200;      // righe con la casella "attivo" pronta in Cantieri e Operatori
-var VERSIONE_SCRIPT = 4;      // compare nelle risposte: serve a capire quale versione è pubblicata
+var VERSIONE_SCRIPT = 5;      // compare nelle risposte: serve a capire quale versione è pubblicata
 
 // ---------- Web App ----------
 
@@ -53,7 +69,7 @@ function doPost(e) {
     var operatore = operatoreDaCodice(dati.codice);
     if (!operatore) return rispostaJson({ ok: false, errore: 'codice' });
     if (!Array.isArray(dati.note)) return rispostaJson({ ok: false, errore: 'richiesta' });
-    var esito = aggiungiNote(operatore, dati.note.slice(0, MAX_NOTE_PER_RICHIESTA));
+    var esito = aggiungiRegistrazioni(operatore, dati.note.slice(0, MAX_NOTE_PER_RICHIESTA));
     return rispostaJson({ ok: true, ricevute: esito.ricevute, scartate: esito.scartate });
   } catch (errore) {
     console.error('doPost: ' + errore);
@@ -75,6 +91,12 @@ function foglio(nome) {
 
 function lettera(colonna) {
   return String.fromCharCode(64 + colonna);   // 1 → A (vale fino alla colonna Z)
+}
+
+// Intervallo A1 di un'intera colonna di un foglio, dalla riga 2 in giù (es. "E2:E").
+function colonnaIntera(nomeFoglio, intestazione) {
+  var l = lettera(COLONNE[nomeFoglio][intestazione]);
+  return l + '2:' + l;
 }
 
 // Valori di un foglio senza la riga di intestazione, solo le colonne previste.
@@ -121,61 +143,33 @@ function leggiConfig(chiave) {
   return riga ? riga[1] : '';
 }
 
-// ---------- Note ----------
+// ---------- Registrazioni (note e richieste) ----------
 
-function aggiungiNote(operatore, note) {
+function aggiungiRegistrazioni(operatore, note) {
   var ricevute = [];
   var scartate = [];
-  var pulite = [];
+  var perTipo = {};
   note.forEach(function (nota) {
     var pulita = pulisciNota(nota);
-    if (pulita) pulite.push(pulita);
-    else if (nota && nota.id) scartate.push(String(nota.id));
-  });
-  if (!pulite.length) return { ricevute: ricevute, scartate: scartate };
-
-  // Un solo invio alla volta scrive sul foglio: niente righe sovrapposte né doppioni.
-  var blocco = LockService.getScriptLock();
-  blocco.waitLock(30000);
-  var cantieriNuovi = [];
-  try {
-    var f = foglio(NOME_SEGNALAZIONI);
-    if (!f) throw new Error('Manca il foglio "' + NOME_SEGNALAZIONI + '": usa "Prepara il foglio"');
-
-    // Una sola lettura della colonna id: serve per i doppioni e per trovare dove scrivere.
-    var ids = colonnaId(f);
-    var esistenti = {};
-    ids.forEach(function (id) { if (id) esistenti[id.toLowerCase()] = true; });
-
-    var adesso = new Date();
-    var righe = [];
-    pulite.forEach(function (nota) {
-      ricevute.push(nota.idOriginale);
-      if (esistenti[nota.id]) return;   // già arrivata: il telefono l'ha solo rimandata
-      esistenti[nota.id] = true;
-      var riga = [];
-      riga[COL.id - 1] = nota.id;
-      riga[COL.data_ora_nota - 1] = nota.dataOraNota;
-      riga[COL.data_ora_ricezione - 1] = adesso;
-      riga[COL.operatore - 1] = operatore;
-      riga[COL.cantiere - 1] = nota.cantiere;
-      riga[COL.testo_originale - 1] = nota.testo;
-      riga[COL.testo_corretto - 1] = '';
-      riga[COL.stato_correzione - 1] = '';
-      riga[COL.letto - 1] = false;
-      righe.push(riga);
-      if (cantieriNuovi.indexOf(nota.cantiere) < 0) cantieriNuovi.push(nota.cantiere);
-    });
-
-    if (righe.length) {
-      var prima = primaRigaLiberaPer(ids, righe.length);
-      f.getRange(prima, 1, righe.length, righe[0].length).setValues(righe);
-      f.getRange(prima, COL.letto, righe.length, 1).insertCheckboxes();
-      SpreadsheetApp.flush();
+    if (!pulita) {
+      if (nota && nota.id) scartate.push(String(nota.id));
+      return;
     }
-  } finally {
-    blocco.releaseLock();
-  }
+    ricevute.push(pulita.idOriginale);
+    if (!perTipo[pulita.tipo]) perTipo[pulita.tipo] = [];
+    perTipo[pulita.tipo].push(pulita);
+  });
+
+  var adesso = new Date();
+  var cantieriNuovi = [];
+  Object.keys(perTipo).forEach(function (tipo) {
+    var scritte = scriviRegistrazioni(tipo, perTipo[tipo], operatore, adesso);
+    if (tipo === 'nota') {
+      scritte.forEach(function (nota) {
+        if (cantieriNuovi.indexOf(nota.cantiere) < 0) cantieriNuovi.push(nota.cantiere);
+      });
+    }
+  });
 
   // Alla prima nota di un cantiere nasce il suo foglio. Se qualcosa va storto qui, le note
   // sono comunque salvate: non deve far fallire la risposta al telefono.
@@ -187,11 +181,56 @@ function aggiungiNote(operatore, note) {
   return { ricevute: ricevute, scartate: scartate };
 }
 
-// Colonna degli id di "Segnalazioni" dalla riga 2 all'ultima riga usata (compresi i vuoti).
+// Scrive le registrazioni di un tipo nel suo foglio, saltando gli id già presenti.
+// Restituisce quelle scritte davvero. Un solo invio alla volta scrive sul foglio.
+function scriviRegistrazioni(tipo, registrazioni, operatore, adesso) {
+  var def = TIPI[tipo];
+  var f = foglio(def.foglio);
+  if (!f) throw new Error('Manca il foglio "' + def.foglio + '": usa "Prepara il foglio"');
+  var cols = COLONNE[def.foglio];
+  var scritte = [];
+
+  var blocco = LockService.getScriptLock();
+  blocco.waitLock(30000);
+  try {
+    // Una sola lettura della colonna id: serve per i doppioni e per trovare dove scrivere.
+    var ids = colonnaId(f);
+    var esistenti = {};
+    ids.forEach(function (id) { if (id) esistenti[id.toLowerCase()] = true; });
+
+    var righe = [];
+    registrazioni.forEach(function (registrazione) {
+      if (esistenti[registrazione.id]) return;   // già arrivata: il telefono l'ha solo rimandata
+      esistenti[registrazione.id] = true;
+      var riga = INTESTAZIONI[def.foglio].map(function () { return ''; });
+      riga[cols.id - 1] = registrazione.id;
+      riga[cols[def.colonnaData] - 1] = registrazione.dataOraNota;
+      riga[cols.data_ora_ricezione - 1] = adesso;
+      riga[cols.operatore - 1] = operatore;
+      riga[cols.cantiere - 1] = registrazione.cantiere;
+      riga[cols[def.colonnaTesto] - 1] = registrazione.testo;
+      riga[cols[def.colonnaCasella] - 1] = false;
+      righe.push(riga);
+      scritte.push(registrazione);
+    });
+
+    if (righe.length) {
+      var prima = primaRigaLiberaPer(ids, righe.length);
+      f.getRange(prima, 1, righe.length, righe[0].length).setValues(righe);
+      f.getRange(prima, cols[def.colonnaCasella], righe.length, 1).insertCheckboxes();
+      SpreadsheetApp.flush();
+    }
+  } finally {
+    blocco.releaseLock();
+  }
+  return scritte;
+}
+
+// Colonna degli id dalla riga 2 all'ultima riga usata (compresi i vuoti).
 function colonnaId(f) {
   var ultima = f.getLastRow();
   if (ultima < 2) return [];
-  return f.getRange(2, COL.id, ultima - 1, 1).getValues().map(function (riga) { return String(riga[0]).trim(); });
+  return f.getRange(2, 1, ultima - 1, 1).getValues().map(function (riga) { return String(riga[0]).trim(); });
 }
 
 // Prima riga da cui ci sono "quante" righe libere di seguito; se non c'è un buco così grande,
@@ -207,15 +246,14 @@ function primaRigaLiberaPer(ids, quante) {
   return (inizio >= 0 ? inizio : ids.length) + 2;
 }
 
-// Controlla e ripulisce una nota arrivata dal telefono; null se non è utilizzabile.
+// Controlla e ripulisce una registrazione arrivata dal telefono; null se non è utilizzabile.
 function pulisciNota(nota) {
   if (!nota || typeof nota !== 'object') return null;
   var idOriginale = String(nota.id || '').trim();
   var id = idOriginale.toLowerCase();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) return null;
-  // Per ora esiste un solo tipo di registrazione: gli altri verranno con i prossimi moduli.
   var tipo = String(nota.tipo || 'nota').trim().toLowerCase();
-  if (tipo !== 'nota') return null;
+  if (!TIPI[tipo]) return null;
   var testo = String(nota.testo || '').trim();
   if (!testo) return null;
   if (testo.length > MAX_LUNGHEZZA_TESTO) testo = testo.slice(0, MAX_LUNGHEZZA_TESTO);
@@ -317,18 +355,33 @@ function assicuraTuttiIFogliCantiere() {
   assicuraFogliPerCantieri(valoriFoglio(NOME_SEGNALAZIONI).map(function (riga) { return riga[COL.cantiere - 1]; }));
 }
 
-// Quando l'ufficio cambia il cantiere di una nota (colonna "cantiere" di "Segnalazioni")
-// il foglio del cantiere nuovo nasce se non c'è; i fogli si aggiornano da soli.
+// ---------- Modifiche a mano dell'ufficio ----------
+
+// - In "Segnalazioni": cambiando il cantiere di una nota, il foglio del cantiere nuovo nasce se non c'è.
+// - In "Richieste": chi accetta una richiesta sceglie il suo nome; la data di accettazione si scrive da sola.
 function onEdit(e) {
   try {
     if (!e || !e.range) return;
     var f = e.range.getSheet();
-    if (f.getName() !== NOME_SEGNALAZIONI) return;
-    if (e.range.getColumn() > COL.cantiere || e.range.getLastColumn() < COL.cantiere) return;
-    var valori = f.getRange(e.range.getRow(), COL.cantiere, e.range.getNumRows(), 1).getValues();
-    assicuraFogliPerCantieri(valori.map(function (riga) { return riga[0]; }));
-    // Creare un foglio lo porta in primo piano: si torna dove l'ufficio stava lavorando.
-    f.activate();
+    var nome = f.getName();
+    var primaCol = e.range.getColumn();
+    var ultimaCol = e.range.getLastColumn();
+
+    if (nome === NOME_SEGNALAZIONI) {
+      if (primaCol > COL.cantiere || ultimaCol < COL.cantiere) return;
+      var valori = f.getRange(e.range.getRow(), COL.cantiere, e.range.getNumRows(), 1).getValues();
+      assicuraFogliPerCantieri(valori.map(function (riga) { return riga[0]; }));
+      // Creare un foglio lo porta in primo piano: si torna dove l'ufficio stava lavorando.
+      f.activate();
+    } else if (nome === NOME_RICHIESTE) {
+      var cols = COLONNE[NOME_RICHIESTE];
+      if (primaCol > cols.accettata_da || ultimaCol < cols.accettata_da) return;
+      for (var riga = e.range.getRow(); riga < e.range.getRow() + e.range.getNumRows(); riga++) {
+        if (riga < 2) continue;
+        var chi = String(f.getRange(riga, cols.accettata_da).getValue()).trim();
+        f.getRange(riga, cols.data_accettazione).setValue(chi ? new Date() : '');
+      }
+    }
   } catch (errore) {
     console.error('onEdit: ' + errore);
   }
@@ -341,6 +394,9 @@ function onOpen() {
     .addItem('Prepara il foglio', 'preparaFoglio')
     .addItem('Nuovo operatore…', 'nuovoOperatore')
     .addItem('Mostra / nascondi operatori', 'mostraNascondiOperatori')
+    .addSeparator()
+    .addItem('Sposta la riga in Richieste', 'spostaRigaInRichieste')
+    .addItem('Sposta la riga in Segnalazioni', 'spostaRigaInSegnalazioni')
     .addToUi();
 }
 
@@ -362,21 +418,49 @@ function preparaFoglio() {
   cantieri.setColumnWidth(1, 260);
   cantieri.setColumnWidth(3, 420);
 
-  var segnalazioni = assicuraFoglio(ss, NOME_SEGNALAZIONI);
-  var c = function (nomeColonna) { return lettera(COL[nomeColonna]); };
-  // Formati su tutta la colonna, così non c'è un limite di righe oltre il quale spariscono.
-  segnalazioni.getRange(c('id') + '2:' + c('id')).setNumberFormat('@');
-  segnalazioni.getRange(c('data_ora_nota') + '2:' + c('data_ora_ricezione')).setNumberFormat('dd/mm/yyyy hh:mm');
-  segnalazioni.getRange(c('operatore') + '2:' + c('stato_correzione')).setNumberFormat('@');
-  segnalazioni.getRange(c('testo_originale') + '2:' + c('testo_corretto')).setWrap(true);
-  // Tendina dei cantieri: segnala un nome che non è in "Cantieri" ma non blocca lo script.
-  var regola = SpreadsheetApp.newDataValidation()
+  var tendinaCantieri = SpreadsheetApp.newDataValidation()
     .requireValueInRange(cantieri.getRange('A2:A'), true)
-    .setAllowInvalid(true)
+    .setAllowInvalid(true)   // segnala un nome che non è in "Cantieri" ma non blocca lo script
     .build();
-  segnalazioni.getRange(c('cantiere') + '2:' + c('cantiere')).setDataValidation(regola);
+
+  var segnalazioni = assicuraFoglio(ss, NOME_SEGNALAZIONI);
+  var s = function (intestazione) { return colonnaIntera(NOME_SEGNALAZIONI, intestazione); };
+  // Formati su tutta la colonna, così non c'è un limite di righe oltre il quale spariscono.
+  segnalazioni.getRange(s('id')).setNumberFormat('@');
+  segnalazioni.getRange(lettera(COL.data_ora_nota) + '2:' + lettera(COL.data_ora_ricezione)).setNumberFormat('dd/mm/yyyy hh:mm');
+  segnalazioni.getRange(lettera(COL.operatore) + '2:' + lettera(COL.stato_correzione)).setNumberFormat('@');
+  segnalazioni.getRange(lettera(COL.testo_originale) + '2:' + lettera(COL.testo_corretto)).setWrap(true);
+  segnalazioni.getRange(s('cantiere')).setDataValidation(tendinaCantieri);
   [60, 130, 130, 110, 200, 420, 420, 110, 60].forEach(function (larghezza, i) {
     segnalazioni.setColumnWidth(i + 1, larghezza);
+  });
+
+  var persone = assicuraFoglio(ss, NOME_PERSONE);
+  persone.getRange('A2:A').setNumberFormat('@');
+  persone.getRange('B1').setValue('Scrivi qui sotto, uno per riga, i nomi di chi in ufficio accetta le richieste: compaiono nella tendina "accettata_da".')
+    .setFontStyle('italic').setFontColor('#595959');
+  persone.setColumnWidth(1, 220);
+  persone.setColumnWidth(2, 640);
+
+  var richieste = assicuraFoglio(ss, NOME_RICHIESTE);
+  var r = function (intestazione) { return colonnaIntera(NOME_RICHIESTE, intestazione); };
+  var cr = COLONNE[NOME_RICHIESTE];
+  richieste.getRange(r('id')).setNumberFormat('@');
+  richieste.getRange(lettera(cr.data_ora_richiesta) + '2:' + lettera(cr.data_ora_ricezione)).setNumberFormat('dd/mm/yyyy hh:mm');
+  richieste.getRange(r('data_accettazione')).setNumberFormat('dd/mm/yyyy hh:mm');
+  [cr.operatore, cr.cantiere, cr.richiesta, cr.accettata_da, cr.note_ufficio].forEach(function (colonna) {
+    richieste.getRange(lettera(colonna) + '2:' + lettera(colonna)).setNumberFormat('@');
+  });
+  richieste.getRange(r('richiesta')).setWrap(true);
+  richieste.getRange(r('note_ufficio')).setWrap(true);
+  richieste.getRange(r('cantiere')).setDataValidation(tendinaCantieri);
+  // Chi accetta sceglie il proprio nome dalla tendina (si può anche scrivere a mano).
+  richieste.getRange(r('accettata_da')).setDataValidation(SpreadsheetApp.newDataValidation()
+    .requireValueInRange(persone.getRange('A2:A'), true)
+    .setAllowInvalid(true)
+    .build());
+  [60, 130, 130, 110, 200, 420, 150, 130, 60, 300].forEach(function (larghezza, i) {
+    richieste.setColumnWidth(i + 1, larghezza);
   });
 
   var operatori = assicuraFoglio(ss, NOME_OPERATORI);
@@ -401,7 +485,7 @@ function preparaFoglio() {
   assicuraTuttiIFogliCantiere();
 
   ss.setActiveSheet(segnalazioni);
-  SpreadsheetApp.getUi().alert('Foglio pronto.\n\n1. Scrivi i cantieri nel foglio "' + NOME_CANTIERI + '" e spunta "attivo".\n2. Crea gli operatori dal menu "Diario Cantieri → Nuovo operatore…" e manda a ciascuno il suo link.');
+  SpreadsheetApp.getUi().alert('Foglio pronto.\n\n1. Scrivi i cantieri nel foglio "' + NOME_CANTIERI + '" e spunta "attivo".\n2. Scrivi in "' + NOME_PERSONE + '" i nomi di chi accetta le richieste.\n3. Crea gli operatori dal menu "Diario Cantieri → Nuovo operatore…" e manda a ciascuno il suo link.');
 }
 
 function assicuraFoglio(ss, nome) {
@@ -458,6 +542,52 @@ function assicuraConfig(f, chiave, valore, nota) {
     f.getRange(riga, 2).insertCheckboxes();
     if (valore) f.getRange(riga, 2).setValue(true);
   }
+}
+
+// ---------- Spostare una riga tra note e richieste ----------
+
+function spostaRigaInRichieste() { spostaRiga('nota', 'richiesta'); }
+function spostaRigaInSegnalazioni() { spostaRiga('richiesta', 'nota'); }
+
+// Una nota che in realtà era una richiesta (o il contrario): la riga selezionata passa
+// nell'altro foglio con id, date, operatore, cantiere e testo; qui viene cancellata.
+function spostaRiga(daTipo, aTipo) {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var daFoglio = TIPI[daTipo].foglio;
+  var aFoglio = TIPI[aTipo].foglio;
+  var f = ss.getActiveSheet();
+  var cella = ss.getActiveRange();
+  if (f.getName() !== daFoglio || !cella || cella.getRow() < 2) {
+    ui.alert('Prima seleziona la riga da spostare nel foglio "' + daFoglio + '", poi usa questa voce del menu.');
+    return;
+  }
+  var riga = cella.getRow();
+  var cols = COLONNE[daFoglio];
+  var valori = f.getRange(riga, 1, 1, INTESTAZIONI[daFoglio].length).getValues()[0];
+  var id = String(valori[cols.id - 1]).trim();
+  var testo = String(valori[cols[TIPI[daTipo].colonnaTesto] - 1]).trim();
+  if (!id || !testo) {
+    ui.alert('La riga ' + riga + ' è vuota.');
+    return;
+  }
+  var conferma = ui.alert('Sposto in "' + aFoglio + '" la riga ' + riga + '?\n\n' + testo.slice(0, 200), ui.ButtonSet.YES_NO);
+  if (conferma !== ui.Button.YES) return;
+
+  var data = valori[cols[TIPI[daTipo].colonnaData] - 1];
+  var ricezione = valori[cols.data_ora_ricezione - 1];
+  var registrazione = {
+    id: id.toLowerCase(),
+    idOriginale: id,
+    tipo: aTipo,
+    testo: testo,
+    cantiere: String(valori[cols.cantiere - 1]).trim() || GENERALE,
+    dataOraNota: data instanceof Date ? data : new Date()
+  };
+  scriviRegistrazioni(aTipo, [registrazione], String(valori[cols.operatore - 1]).trim(), ricezione instanceof Date ? ricezione : new Date());
+  f.deleteRow(riga);
+  if (aTipo === 'nota') assicuraFogliPerCantieri([registrazione.cantiere]);
+  ss.getSheetByName(aFoglio).activate();
 }
 
 // ---------- Operatori ----------

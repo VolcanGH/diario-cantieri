@@ -52,7 +52,7 @@ var MAX_NOTE_PER_RICHIESTA = 50;
 var MAX_LUNGHEZZA_TESTO = 20000;
 var MAX_LUNGHEZZA_CANTIERE = 100;
 var RIGHE_CASELLE = 200;      // righe con la casella "attivo" pronta in Cantieri e Operatori
-var VERSIONE_SCRIPT = 8;      // compare nelle risposte: serve a capire quale versione è pubblicata
+var VERSIONE_SCRIPT = 9;      // compare nelle risposte: serve a capire quale versione è pubblicata
 
 // ---------- Web App ----------
 
@@ -499,7 +499,7 @@ function preparaFoglio() {
 
   var persone = assicuraFoglio(ss, NOME_PERSONE);
   persone.getRange('A2:A').setNumberFormat('@');
-  persone.getRange('B1').setValue('Scrivi qui sotto, uno per riga, i nomi di chi in ufficio accetta le richieste: compaiono nella tendina "accettata_da".')
+  persone.getRange('B1').setValue('Scrivi qui sotto, uno per riga, i nomi di chi in ufficio accetta le richieste: compaiono nella tendina "accettata_da". Usa i nomi esatti previsti dalla routine del calendario (vedi CORREZIONE.md): per aggiungere una persona o cambiarne il nome avvisa prima Mirko.')
     .setFontStyle('italic').setFontColor('#595959');
   persone.setColumnWidth(1, 220);
   persone.setColumnWidth(2, 640);

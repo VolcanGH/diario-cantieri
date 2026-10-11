@@ -20,7 +20,7 @@ Tutto si fa nel foglio Google **"Diario Cantieri"** (nel Drive dell'account Goog
 |---|---|---|
 | `Segnalazioni` | Tutte le note, una per riga, in ordine di arrivo | Sì: solo le colonne `cantiere`, `testo_corretto` e `letto` |
 | `Richieste` | Le cose da fare che l'operatore chiede all'ufficio | Sì: `accettata_da`, `fatto`, `note_ufficio` (e `cantiere`) |
-| `Persone` | I nomi di chi in ufficio accetta le richieste | Sì, uno per riga |
+| `Persone` | I nomi di chi in ufficio accetta le richieste | Sì, uno per riga, ma solo i nomi previsti dalla routine del calendario (vedi `CORREZIONE.md`): per aggiungerne uno avvisa Mirko |
 | `Cantieri` | L'elenco dei cantieri: `nome`, `attivo`, `note` | Sì, è l'ufficio che lo tiene aggiornato |
 | Una scheda per cantiere (es. `Rossi`) | Le note di quel cantiere, dalla più recente | **No**: è una formula che legge `Segnalazioni` |
 | `Config` | Due impostazioni (vedi sotto) | Solo se serve |
@@ -36,7 +36,7 @@ Tutto si fa nel foglio Google **"Diario Cantieri"** (nel Drive dell'account Goog
 
 **Segnare una nota come letta.** In `Segnalazioni`, spunta la casella `letto`.
 
-**Una richiesta dell'operatore ("da fare per l'ufficio").** Arriva nel foglio `Richieste`, con cantiere e testo. Chi se ne occupa sceglie il **proprio nome** nella tendina `accettata_da`: la data di accettazione si scrive da sola la prima volta e poi non cambia più (se la richiesta passa di mano, correggi la data a mano; se togli il nome, la data sparisce). Quando è fatta, spunta `fatto`; in `note_ufficio` si può annotare cosa è stato fatto. I nomi della tendina sono quelli scritti nel foglio `Persone`. Si può anche scrivere a mano un promemoria in `Richieste`: basta che abbia il testo nella colonna `richiesta` (le righe con `id` e `richiesta` vuoti vengono riusate dallo script).
+**Una richiesta dell'operatore ("da fare per l'ufficio").** Arriva nel foglio `Richieste`, con cantiere e testo. Chi se ne occupa sceglie il **proprio nome** nella tendina `accettata_da`: la data di accettazione si scrive da sola la prima volta e poi non cambia più (se la richiesta passa di mano, correggi la data a mano; se togli il nome, la data sparisce). Entro un'ora la routine esterna crea un evento nel calendario Google di Mirko per il giorno dopo, con il colore di chi ha accettato (dettagli in `CORREZIONE.md`). Quando è fatta, spunta `fatto`; in `note_ufficio` si può annotare cosa è stato fatto. I nomi della tendina sono quelli scritti nel foglio `Persone`. Si può anche scrivere a mano un promemoria in `Richieste`: basta che abbia il testo nella colonna `richiesta` (le righe con `id` e `richiesta` vuoti vengono riusate dallo script).
 
 **Una richiesta è finita tra le note (o una nota tra le richieste).** Seleziona una cella della riga e usa il menu **Diario Cantieri → Sposta la riga in Richieste** (o *…in Segnalazioni*): la riga passa nell'altro foglio con id, date, operatore, cantiere e testo; quello che aveva compilato l'ufficio (spunte, nome di chi ha accettato, note) non viene copiato. Se nell'altro foglio c'è già una riga con lo stesso id lo script non sposta niente e lo dice.
 

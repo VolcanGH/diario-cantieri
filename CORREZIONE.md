@@ -4,10 +4,16 @@ Queste istruzioni sono per chi corregge i testi dettati dall'operatore: un progr
 
 **Stato attuale (ottobre 2026):** il correttore è una routine di Claude nel cloud, sull'account di Mirko, che gira **ogni ora dal lunedì al sabato, dalle 7 alle 19 circa**. Una nota dettata la sera o di domenica viene corretta al primo giro utile.
 
-## Contratto: cosa non deve cambiare
+## Contratto: cosa non deve cambiare nel foglio
 
-- I **nomi** delle colonne `id`, `testo_originale`, `testo_corretto`, `richiesta`, `richiesta_corretta`, `stato_correzione` non vanno rinominati: il correttore le trova per nome. Spostarle di posto si può.
-- Il foglio deve restare **condiviso** con l'account del correttore (Editor); se la condivisione sparisce, la correzione si ferma in silenzio.
+La routine trova schede e colonne **per nome**. Spostarle di posto si può; rinominarle no.
+
+- Schede: `Segnalazioni`, `Richieste`, `Config` (e `Persone`, da cui viene la tendina dei nomi).
+- Colonne: `id`, `cantiere`, `operatore`, `testo_originale`, `testo_corretto`, `richiesta`, `richiesta_corretta`, `stato_correzione`, `accettata_da`, `data_accettazione`.
+- `data_accettazione` resta nel formato `GG/MM/AAAA HH:MM` (è il formato che "Prepara il foglio" mette sulla colonna: non cambiarlo a mano).
+- I nomi in `Persone` (quindi nella tendina `accettata_da`) devono essere **esattamente** quelli noti alla routine, oggi: Mirko, Monica, Gabriele, Mattia, Stefano. Per aggiungere una persona, cambiarle il nome o il colore, avvisare Mirko: va aggiornata la routine.
+- Se nasce una scheda nuova con testi da correggere, avvisare Mirko: va aggiunta alle istruzioni della routine.
+- Il foglio deve restare **condiviso** con l'account della routine (Editor); se la condivisione sparisce, tutto si ferma in silenzio.
 - La riga `correzione_attiva` in `Config` deve restare, con quel nome.
 
 ## Cosa deve fare, in breve
@@ -83,3 +89,21 @@ Se il testo è già corretto, ricopiarlo uguale. Se è incomprensibile, ricopiar
 ## Dove si vede il risultato
 
 Nei fogli per cantiere, accanto all'originale (colonna `testo_corretto`), e nelle colonne dei due fogli principali.
+
+## Eventi in calendario per le richieste accettate (stessa routine, dall'11/10/2026)
+
+Non fa parte della correzione, ma lo fa la stessa routine, leggendo lo stesso foglio:
+
+- Quando in `Richieste` una riga ha `accettata_da` e `data_accettazione`, crea un evento sul calendario Google di Mirko: inizio a `data_accettazione` + 24 ore arrotondato all'ora intera più vicina, durata 30 minuti, promemoria all'inizio.
+- Titolo: `<cantiere> – <richiesta_corretta>`. Descrizione: chi ha fatto la richiesta, chi l'ha accettata e quando, testo originale, `id richiesta: <id>`.
+- Colore per persona: Mirko rosso, Monica blu, Gabriele verde, Mattia giallo, Stefano grigio; un nome fuori tabella prende il colore predefinito.
+- Niente doppioni: prima di creare cerca l'`id` della richiesta nel calendario. Non modifica né cancella eventi già creati. Nel foglio non scrive niente.
+- Le accettazioni precedenti all'11/10/2026 19:53 (prove) vengono ignorate.
+- Limiti: crea eventi, non attività di Google Tasks; un'accettazione del sabato sera viene elaborata il lunedì alle 7.
+- `Config.correzione_attiva = FALSE` ferma solo le correzioni, non gli eventi.
+
+La colonna `fatto` di `Richieste` resta e resta dell'ufficio: la routine non la legge, ma è l'unico posto dove è scritto che una richiesta è stata chiusa (l'evento in calendario è un promemoria, non un registro).
+
+## Avvisi
+
+Se un giro fallisce (foglio o calendario non raggiungibili, scheda o colonna non trovata, righe in errore, evento non creato) la routine manda una mail a Mirko, al massimo una al giorno. Se per qualche giorno non arrivano né correzioni né eventi, la prima cosa da controllare è la condivisione del foglio.

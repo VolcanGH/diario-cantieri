@@ -92,7 +92,7 @@ Da sapere:
 - **`prove/server-finto.js`** — un server locale per provare l'app sul computer senza toccare Google: `node prove/server-finto.js`, poi apri `http://localhost:8765/app/?c=PROVAPROVAPROVA1` (il codice operatore di prova). Il finto backend sta su `http://localhost:8766/exec` e risponde anche a `/stato` (note ricevute), `/azzera` (svuota) e `/guasto/on` · `/guasto/off` (simula un foglio guasto).
 - **`app/icons/icona.svg`** — il disegno dell'icona; i PNG a 192 e 512 px sono ricavati da lì.
 - **`CLAUDE.md`** — la specifica originale dell'app.
-- **`CORREZIONE.md`** — il contratto per il correttore esterno dei testi: quali righe, quali colonne, come scrivere, regole di correzione.
+- **`CORREZIONE.md`** — il contratto per il correttore esterno dei testi (oggi una routine di Claude nel cloud, ogni ora dal lunedì al sabato): quali righe, quali colonne, come scrivere, regole di correzione. Due vincoli da rispettare nel foglio: **non rinominare** le colonne `id`, `testo_originale`, `testo_corretto`, `richiesta`, `richiesta_corretta`, `stato_correzione` (spostarle si può) e **non togliere la condivisione** del foglio con l'account del correttore.
 
 Il dialogo telefono ↔ foglio è tutto qui:
 

@@ -52,7 +52,7 @@ var MAX_NOTE_PER_RICHIESTA = 50;
 var MAX_LUNGHEZZA_TESTO = 20000;
 var MAX_LUNGHEZZA_CANTIERE = 100;
 var RIGHE_CASELLE = 200;      // righe con la casella "attivo" pronta in Cantieri e Operatori
-var VERSIONE_SCRIPT = 7;      // compare nelle risposte: serve a capire quale versione è pubblicata
+var VERSIONE_SCRIPT = 8;      // compare nelle risposte: serve a capire quale versione è pubblicata
 
 // ---------- Web App ----------
 
@@ -534,7 +534,7 @@ function preparaFoglio() {
   operatori.hideSheet();
 
   var config = assicuraFoglio(ss, NOME_CONFIG);
-  assicuraConfig(config, 'correzione_attiva', false, 'Correzione dei testi fatta dal correttore esterno (vedi CORREZIONE.md): lui la legge prima di lavorare. Spunta per attivarla, togli la spunta per fermarlo.');
+  assicuraConfig(config, 'correzione_attiva', false, 'Correzione dei testi: la fa un correttore esterno (una routine di Claude nel cloud, ogni ora dal lunedì al sabato; regole in CORREZIONE.md). Spunta per attivarla, togli la spunta per fermarla.');
   assicuraConfig(config, 'url_app', 'https://volcangh.github.io/diario-cantieri/app/', 'Indirizzo dell\'app sul telefono: serve per creare i link degli operatori. Non cambiarlo.');
   config.setColumnWidth(1, 180);
   config.setColumnWidth(2, 420);
@@ -601,7 +601,13 @@ function segnaSpunta(f, riga, colonna) {
 }
 
 function assicuraConfig(f, chiave, valore, nota) {
-  if (cercaRiga(NOME_CONFIG, 1, chiave, false)) return;
+  var esistente = rigaConId(f, 1, chiave);
+  if (esistente) {
+    // La riga c'è già: si aggiorna solo la spiegazione, il valore resta quello scelto dall'ufficio.
+    var cella = f.getRange(esistente, 3);
+    if (String(cella.getValue()) !== nota) cella.setValue(nota);
+    return;
+  }
   var riga = scriviRiga(f, [chiave, typeof valore === 'boolean' ? '' : valore, nota]);
   if (typeof valore === 'boolean') {
     f.getRange(riga, 2).insertCheckboxes();

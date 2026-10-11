@@ -9,7 +9,7 @@ Queste istruzioni sono per chi corregge i testi dettati dall'operatore: un progr
 La routine trova schede e colonne **per nome**. Spostarle di posto si può; rinominarle no.
 
 - Schede: `Segnalazioni`, `Richieste`, `Config` (e `Persone`, da cui viene la tendina dei nomi).
-- Colonne: `id`, `cantiere`, `operatore`, `testo_originale`, `testo_corretto`, `richiesta`, `richiesta_corretta`, `stato_correzione`, `accettata_da`, `data_accettazione`.
+- Colonne: `id`, `cantiere`, `operatore`, `testo_originale`, `testo_corretto`, `richiesta`, `richiesta_corretta`, `stato_correzione`, `accettata_da`, `data_accettazione`, `fatto`.
 - `data_accettazione` resta nel formato `GG/MM/AAAA HH:MM` (è il formato che "Prepara il foglio" mette sulla colonna: non cambiarlo a mano).
 - I nomi in `Persone` (quindi nella tendina `accettata_da`) devono essere **esattamente** quelli noti alla routine, oggi: Mirko, Monica, Gabriele, Mattia, Stefano. Per aggiungere una persona, cambiarle il nome o il colore, avvisare Mirko: va aggiornata la routine.
 - Se nasce una scheda nuova con testi da correggere, avvisare Mirko: va aggiunta alle istruzioni della routine.
@@ -98,11 +98,12 @@ Non fa parte della correzione, ma lo fa la stessa routine, leggendo lo stesso fo
 - Titolo: `<cantiere> – <richiesta_corretta>` (se `richiesta_corretta` è vuota usa `richiesta`; nello stesso giro la correzione gira prima degli eventi, quindi di norma il testo corretto c'è già). Descrizione: chi ha fatto la richiesta, chi l'ha accettata e quando, testo originale, `id richiesta: <id>`.
 - Colore per persona: Mirko rosso, Monica blu, Gabriele verde, Mattia giallo, Stefano grigio; un nome fuori tabella prende il colore predefinito.
 - Niente doppioni: prima di creare cerca l'`id` della richiesta nel calendario. Non modifica né cancella eventi già creati. Nel foglio non scrive niente.
+- Una richiesta già spuntata `fatto` al momento del giro non genera l'evento (viene solo elencata nel resoconto del giro, senza mail). Se la spunta arriva dopo, l'evento già creato resta in calendario. Se la colonna `fatto` sparisse, la regola verrebbe ignorata in silenzio: altro motivo per non toglierla.
 - Le accettazioni precedenti all'11/10/2026 19:53 (prove) vengono ignorate.
 - Limiti: crea eventi, non attività di Google Tasks; un'accettazione del sabato sera viene elaborata il lunedì alle 7.
 - `Config.correzione_attiva = FALSE` ferma solo le correzioni, non gli eventi.
 
-La colonna `fatto` di `Richieste` resta e resta dell'ufficio: la routine non la legge, ma è l'unico posto dove è scritto che una richiesta è stata chiusa (l'evento in calendario è un promemoria, non un registro).
+La colonna `fatto` di `Richieste` resta e resta dell'ufficio: la routine la legge solo per non creare eventi inutili, e il foglio è l'unico posto dove è scritto che una richiesta è stata chiusa (l'evento in calendario è un promemoria, non un registro).
 
 ## Avvisi
 

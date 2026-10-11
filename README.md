@@ -36,9 +36,9 @@ Tutto si fa nel foglio Google **"Diario Cantieri"** (nel Drive dell'account Goog
 
 **Segnare una nota come letta.** In `Segnalazioni`, spunta la casella `letto`.
 
-**Una richiesta dell'operatore ("da fare per l'ufficio").** Arriva nel foglio `Richieste`, con cantiere e testo. Chi se ne occupa sceglie il **proprio nome** nella tendina `accettata_da`: la data di accettazione si scrive da sola. Quando è fatta, spunta `fatto`; in `note_ufficio` si può annotare cosa è stato fatto. I nomi della tendina sono quelli scritti nel foglio `Persone`.
+**Una richiesta dell'operatore ("da fare per l'ufficio").** Arriva nel foglio `Richieste`, con cantiere e testo. Chi se ne occupa sceglie il **proprio nome** nella tendina `accettata_da`: la data di accettazione si scrive da sola la prima volta e poi non cambia più (se la richiesta passa di mano, correggi la data a mano; se togli il nome, la data sparisce). Quando è fatta, spunta `fatto`; in `note_ufficio` si può annotare cosa è stato fatto. I nomi della tendina sono quelli scritti nel foglio `Persone`. Si può anche scrivere a mano un promemoria in `Richieste`: basta che abbia il testo nella colonna `richiesta` (le righe con `id` e `richiesta` vuoti vengono riusate dallo script).
 
-**Una richiesta è finita tra le note (o una nota tra le richieste).** Seleziona una cella della riga e usa il menu **Diario Cantieri → Sposta la riga in Richieste** (o *…in Segnalazioni*): la riga passa nell'altro foglio con data, operatore, cantiere e testo.
+**Una richiesta è finita tra le note (o una nota tra le richieste).** Seleziona una cella della riga e usa il menu **Diario Cantieri → Sposta la riga in Richieste** (o *…in Segnalazioni*): la riga passa nell'altro foglio con id, date, operatore, cantiere e testo; quello che aveva compilato l'ufficio (spunte, nome di chi ha accettato, note) non viene copiato. Se nell'altro foglio c'è già una riga con lo stesso id lo script non sposta niente e lo dice.
 
 **Correggere un testo.** Scrivi la versione corretta in `testo_corretto`, mai in `testo_originale`: l'originale è quello che l'operatore ha detto davvero e va conservato.
 
@@ -87,7 +87,7 @@ Da sapere:
 - **`app/`** — l'app sul telefono: HTML, CSS e JavaScript senza librerie né passaggi di compilazione. Pubblicata con GitHub Pages dal ramo `main` di questo repository: ogni `git push` va online in 1-2 minuti.
   - `config.js`: l'indirizzo della Web App e il **numero di versione**. È l'unico file da toccare per una pubblicazione.
   - `app.js` schermate e navigazione (note e calendario) · `db.js` memoria del telefono (IndexedDB: note, impostazioni, appuntamenti del calendario) e coda di invio · `speech.js` dettatura · `sw.js` service worker (apertura senza rete, aggiornamenti automatici, invio in background).
-  - Per aggiungere un deposito in IndexedDB si alza `VERSIONE_DB` in `db.js` e lo si crea in `onupgradeneeded`: i telefoni si aggiornano da soli alla prima apertura, senza perdere niente.
+  - Per aggiungere un deposito in IndexedDB si alza `VERSIONE_DB` in `db.js`, lo si crea in `onupgradeneeded` e lo si aggiunge all'elenco `DEPOSITI` (ogni transazione apre tutti i depositi elencati): i telefoni si aggiornano da soli alla prima apertura, senza perdere niente. Una pagina rimasta aperta con il codice vecchio si ricarica da sola appena torna alla schermata iniziale.
 - **`apps-script/`** — il codice che gira dentro il foglio Google (Apps Script): `Code.gs` e il manifest `appsscript.json`. Riceve le note, controlla il codice dell'operatore, scarta i doppioni, crea le schede per cantiere, fa il menu.
 - **`prove/server-finto.js`** — un server locale per provare l'app sul computer senza toccare Google: `node prove/server-finto.js`, poi apri `http://localhost:8765/app/?c=PROVAPROVAPROVA1` (il codice operatore di prova). Il finto backend sta su `http://localhost:8766/exec` e risponde anche a `/stato` (note ricevute), `/azzera` (svuota) e `/guasto/on` · `/guasto/off` (simula un foglio guasto).
 - **`app/icons/icona.svg`** — il disegno dell'icona; i PNG a 192 e 512 px sono ricavati da lì.
@@ -96,9 +96,9 @@ Da sapere:
 Il dialogo telefono ↔ foglio è tutto qui:
 
 - `GET  …/exec?codice=CODICE` → `{ "ok": true, "cantieri": [...] }`
-- `POST …/exec` con corpo JSON `{ "codice", "note": [{ "id", "dataOraNota", "cantiere", "testo", "tipo" }] }` → `{ "ok": true, "ricevute": [id…], "scartate": [id…] }`
+- `POST …/exec` con corpo JSON `{ "codice", "note": [{ "id", "dataOraNota", "cantiere", "testo", "tipo" }] }` → `{ "ok": true, "ricevute": [id…], "scartate": [id…], "problema": "…" }` (`problema` c'è solo quando serve)
 
-Il telefono segna "inviata" solo una nota il cui `id` torna in `ricevute`: per questo un invio interrotto a metà non perde né duplica niente (il foglio scarta gli `id` già presenti). Gli `id` in `scartate` (note che il foglio rifiuta: non può succedere con le note fatte dall'app) vengono messi da parte e non ritentati. Il campo `tipo` vale `"nota"` (→ `Segnalazioni`) o `"richiesta"` (→ `Richieste`, l'interruttore "Da fare per l'ufficio"): lo script smista per tipo con la tabella `TIPI` in `Code.gs`, dove un modulo futuro aggiunge una riga.
+Il telefono segna "inviata" solo una nota il cui `id` torna in `ricevute`: per questo un invio interrotto a metà non perde né duplica niente (il foglio scarta gli `id` già presenti, in qualunque dei due fogli siano). Gli `id` in `scartate` sono registrazioni malformate (id non valido o testo vuoto: non capita con le note fatte dall'app) e non vengono ritentati. Una registrazione con un `tipo` che lo script non conosce ancora, o che non si è riusciti a scrivere, non compare né in `ricevute` né in `scartate` e la risposta porta `problema` (`"tipo"` o `"server"`): il telefono la tiene in attesa, riprova con pause crescenti e dopo un giorno avvisa di chiamare l'ufficio. Il campo `tipo` vale `"nota"` (→ `Segnalazioni`) o `"richiesta"` (→ `Richieste`, l'interruttore "Da fare per l'ufficio"): lo script smista per tipo con la tabella `TIPI` in `Code.gs`, dove un modulo futuro aggiunge una riga.
 
 ### Pubblicare una modifica dell'app
 
@@ -123,12 +123,14 @@ clasp update-deployment ID-DELLA-DISTRIBUZIONE -d "descrizione"
 
 L'id della distribuzione è la parte dell'indirizzo della Web App tra `/macros/s/` e `/exec` (lo vedi in `app/config.js`). **Mai creare una distribuzione nuova** per un aggiornamento: avrebbe un indirizzo diverso e i telefoni resterebbero sul codice vecchio. Alza anche `VERSIONE_SCRIPT` in `Code.gs`: compare nelle risposte (`"versione": 3`) ed è il modo per capire quale versione è davvero pubblicata.
 
+Due regole quando cambiano insieme app e script: **prima lo script, poi l'app** (l'app arriva sui telefoni da sola in pochi minuti, lo script solo con questi comandi: nel frattempo le registrazioni di un tipo nuovo resterebbero in attesa sui telefoni), e dopo ogni aggiornamento dello script apri il foglio e lancia **Diario Cantieri → Prepara il foglio**, che crea le schede nuove e sistema formati e tendine (una scheda mancante lo script la crea comunque da solo alla prima registrazione, ma spoglia).
+
 ### Trappole già incontrate (da non ripetere)
 
 - **Il parametro `c` è riservato** nelle Web App di Apps Script (come `sid`): una chiamata `…/exec?c=…` risponde "Pagina non trovata" senza spiegazioni. Per questo il parametro si chiama `codice`. Il link personale dell'app (`…/app/?c=CODICE`) invece va bene: lo legge l'app, non Apps Script.
 - La prima pubblicazione come Web App va fatta dall'editor (*Distribuisci → Nuova distribuzione → Applicazione web → Esegui come: me → Accesso: chiunque*). Gli aggiornamenti si fanno con `clasp update-deployment`.
 - Il foglio Google e il suo script vanno creati dall'editor, non con `clasp create-script`: i tentativi falliti lasciano fogli vuoti nel Drive.
-- Nei fogli, le caselle di spunta preparate in anticipo contano come righe piene per `appendRow` e `getLastRow()`: lo script scrive sempre nella prima riga libera della colonna A, sia nei fogli del menu sia in `Segnalazioni`. Inserire una casella in una cella la azzera: per questo "Prepara il foglio" mette le caselle solo nelle celle vuote, e quando serve una spunta si inserisce prima la casella e poi il valore.
+- Nei fogli, le caselle di spunta preparate in anticipo contano come righe piene per `appendRow` e `getLastRow()`: lo script scrive sempre nella prima riga libera (colonna A vuota nei fogli del menu; `id` e testo vuoti in `Segnalazioni` e `Richieste`, così un promemoria scritto a mano senza id non viene coperto). Inserire una casella in una cella la azzera: per questo "Prepara il foglio" mette le caselle solo nelle celle vuote, e quando serve una spunta si inserisce prima la casella e poi il valore.
 - Le schede per cantiere usano `SORT(CHOOSECOLS(FILTER(…)))` con il separatore `;`, non `QUERY`: `QUERY` si rompe con gli apostrofi nei nomi e con i testi che sembrano numeri.
 - Il link personale aperto dal browser interno di WhatsApp non ha accesso alla memoria di Chrome: sembra funzionare ma non installa niente. Sempre Chrome, poi sempre l'icona.
 

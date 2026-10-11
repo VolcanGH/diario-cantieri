@@ -55,6 +55,7 @@
     giornoNome: $('giorno-nome'),
     giornoData: $('giorno-data'),
     elencoOre: $('elenco-ore'),
+    calendarioAvviso: $('calendario-avviso'),
     calendarioChiudi: $('btn-calendario-chiudi'),
     domandaTitolo: $('domanda-titolo'),
     domandaNo: $('btn-domanda-no'),
@@ -73,7 +74,9 @@
     perUfficio: false,
     appuntamento: null,      // { giorno, ora } della casella aperta dal calendario
     giorno: null,            // giorno mostrato nel calendario
+    oggi: '',                // chiave del giorno in cui il calendario è stato disegnato l'ultima volta
     azioneSi: null,          // cosa fare se nella schermata "domanda" si risponde sì
+    ricaricaAppena: false,   // una versione nuova è pronta: la pagina si ricarica al prossimo ritorno all'inizio
     timerConferma: null,
     timerMicrofono: null,
     ascoltoDa: 0,
@@ -102,6 +105,18 @@
   function nomeGiorno(d) { return GIORNI[d.getDay()] + ' ' + d.getDate() + ' ' + MESI[d.getMonth()]; }
 
   function etichettaOra(ora) { return ora + '–' + (ora + 1); }
+
+  // Ricarica la pagina una volta sola per sessione: se il problema resta anche dopo,
+  // meglio l'avviso nella schermata iniziale che un giro infinito di ricariche.
+  var CHIAVE_RICARICATA = 'diario-cantieri:ricaricata';
+
+  function ricaricaUnaVolta() {
+    try {
+      if (sessionStorage.getItem(CHIAVE_RICARICATA)) return;
+      sessionStorage.setItem(CHIAVE_RICARICATA, '1');
+    } catch (e) { /* senza memoria di sessione si ricarica comunque */ }
+    location.reload();
+  }
 
   // ---- Bozza: il testo della nota si salva da solo mentre si detta ----
   // Se arriva una telefonata e l'app si chiude, alla riapertura il testo è ancora lì.
@@ -160,6 +175,8 @@
     stato.schermo = nome;
     stato.cambioIl = Date.now();
     window.scrollTo(0, 0);
+    // Una versione nuova si attiva solo da qui, mai con una nota o un appuntamento a metà.
+    if (nome === 'home' && stato.ricaricaAppena) ricaricaUnaVolta();
   }
 
   // Anti doppio tocco: per un attimo dopo il cambio di schermata i tocchi vengono ignorati,
@@ -285,6 +302,7 @@
   function apriRacconta() {
     vibra();
     stato.modalita = 'nota';
+    stato.appuntamento = null;
     stato.testoIniziale = '';
     el.raccontaTitolo.hidden = true;
     el.ufficio.hidden = false;
@@ -552,6 +570,7 @@
 
   function apriCalendario() {
     vibra();
+    stato.oggi = chiaveGiorno(new Date());
     stato.giorno = giornoDiCalendario(inizioGiorno(new Date()));
     mostra('calendario');
     mettiGuardia();
@@ -606,8 +625,9 @@
     el.giornoNome.textContent = capo.nome;
     el.giornoData.textContent = capo.data;
     el.elencoOre.textContent = '';
-    Archivio.appuntamentiDelGiorno(chiaveGiorno(giorno)).catch(function () { return []; }).then(function (lista) {
+    Archivio.appuntamentiDelGiorno(chiaveGiorno(giorno)).then(function (lista) {
       if (giorno !== stato.giorno) return;   // nel frattempo si è passati a un altro giorno
+      el.calendarioAvviso.hidden = true;
       var testi = {};
       lista.forEach(function (a) { testi[a.ora] = a.testo; });
       var adesso = new Date();
@@ -616,6 +636,11 @@
       for (var ora = PRIMA_ORA; ora < ULTIMA_ORA; ora++) {
         el.elencoOre.appendChild(rigaOra(ora, testi[ora] || '', ora === oraAdesso));
       }
+    }, function () {
+      if (giorno !== stato.giorno) return;
+      // Senza lettura niente righe: una casella mostrata vuota per sbaglio, se toccata e salvata,
+      // coprirebbe l'appuntamento che c'è davvero.
+      el.calendarioAvviso.hidden = false;
     });
   }
 
@@ -696,7 +721,14 @@
     Coda.invia();
     Coda.scaricaCantieri();
     if (stato.schermo === 'home') aggiornaHome();
-    if (stato.schermo === 'calendario') disegnaGiorno();   // intanto può essere cambiata l'ora, o il giorno
+    if (stato.schermo === 'calendario') {
+      // Intanto può essere cambiata l'ora; se è passata mezzanotte il calendario torna su oggi.
+      if (chiaveGiorno(new Date()) !== stato.oggi) {
+        stato.oggi = chiaveGiorno(new Date());
+        stato.giorno = giornoDiCalendario(inizioGiorno(new Date()));
+      }
+      disegnaGiorno();
+    }
     if (stato.schermo === 'collegamento') avvio();
     var registrazione = stato.registrazioneSW;
     if (registrazione && Date.now() - stato.ultimoControlloVersione > MILLISECONDI_CONTROLLO_VERSIONE) {
@@ -712,6 +744,8 @@
         return;
       }
       if (stato.schermo === 'collegamento') mostra('home');
+      // La memoria si legge: un'eventuale ricarica precedente ha funzionato, la prossima è di nuovo permessa.
+      try { sessionStorage.removeItem(CHIAVE_RICARICATA); } catch (e) { /* non indispensabile */ }
       aggiornaHome();
       Coda.invia();
       Coda.scaricaCantieri();
@@ -748,6 +782,13 @@
   Coda.alCambio = function () {
     aggiornaHome();
     chiediInvioInBackground();
+  };
+  // La memoria è già stata portata a una versione più nuova (dal service worker nuovo, mentre questa
+  // pagina era ancora quella vecchia): da qui non si legge più, serve ricaricare. Subito se si è
+  // all'inizio, altrimenti al primo ritorno all'inizio.
+  Archivio.allaVersioneNuova = function () {
+    if (stato.schermo === 'home') ricaricaUnaVolta();
+    else stato.ricaricaAppena = true;
   };
   window.addEventListener('online', function () { Coda.azzeraAttesa(); Coda.invia(); });
   document.addEventListener('visibilitychange', function () {
@@ -792,8 +833,13 @@
       stato.ultimoControlloVersione = Date.now();
     }).catch(function () { /* senza service worker l'app funziona lo stesso, solo non si apre senza rete */ });
     navigator.serviceWorker.addEventListener('controllerchange', function () {
-      // Versione nuova attiva: si ricarica solo dalla schermata iniziale, mai con una nota a metà.
-      if (avevaGiaUnWorker && stato.schermo === 'home') location.reload();
+      // Versione nuova attiva: si ricarica subito dalla schermata iniziale, altrimenti al primo
+      // ritorno lì (mai con una nota a metà). Senza ricarica la pagina vecchia resterebbe con il
+      // codice vecchio mentre il worker nuovo può già aver aggiornato la memoria.
+      if (avevaGiaUnWorker) {
+        if (stato.schermo === 'home') location.reload();
+        else stato.ricaricaAppena = true;
+      }
       avevaGiaUnWorker = true;
     });
   }

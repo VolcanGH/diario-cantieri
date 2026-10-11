@@ -77,6 +77,8 @@ serverApp.listen(PORTA_APP, () => {
 // ---- 2. Il finto backend ----
 
 const OPERATORI = { PROVAPROVAPROVA1: 'Mario (prova)' };
+// Gli stessi tipi del vero script (tabella TIPI in Code.gs): un modulo nuovo va aggiunto anche qui.
+const TIPI_REGISTRAZIONE = ['nota', 'richiesta'];
 const CANTIERI = ['Casa Rossi – Predazzo', 'Condominio Lagorai', 'Capannone Ziano'];
 let note = [];
 let guasto = false;
@@ -103,15 +105,22 @@ function elaboraNote(dati) {
   if (!Array.isArray(dati.note)) return { ok: false, errore: 'richiesta' };
   const ricevute = [];
   const scartate = [];
+  let problema = '';
   for (const nota of dati.note) {
     const id = String(nota && nota.id || '').toLowerCase();
     if (!/^[0-9a-f-]{36}$/.test(id) || !String(nota.testo || '').trim()) { if (id) scartate.push(id); continue; }
+    // Come il vero script: un tipo sconosciuto non viene né confermato né scartato
+    // (resta in attesa sul telefono) e la risposta porta "problema".
+    const tipo = String(nota.tipo || 'nota').trim().toLowerCase();
+    if (!TIPI_REGISTRAZIONE.includes(tipo)) { problema = 'tipo'; continue; }
     ricevute.push(id);
     if (note.some(n => n.id === id)) continue;   // doppione: già arrivata
     // "nota" o "richiesta": nel vero foglio finiscono in due schede diverse.
-    note.push({ id, tipo: nota.tipo || 'nota', dataOraNota: nota.dataOraNota, dataOraRicezione: new Date().toISOString(), operatore, cantiere: nota.cantiere || 'Generale', testo: nota.testo });
+    note.push({ id, tipo, dataOraNota: nota.dataOraNota, dataOraRicezione: new Date().toISOString(), operatore, cantiere: nota.cantiere || 'Generale', testo: nota.testo });
   }
-  return { ok: true, ricevute, scartate };
+  const risposta = { ok: true, ricevute, scartate };
+  if (problema) risposta.problema = problema;
+  return risposta;
 }
 
 const serverBackend = http.createServer((richiesta, risposta) => {

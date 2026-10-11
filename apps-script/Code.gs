@@ -4,8 +4,10 @@
 // Pubblicato come Web App ("Esegui come: me", "Accesso: chiunque"):
 //   GET  …/exec?codice=CODICE → { ok: true, cantieri: [...] }               elenco dei cantieri attivi
 //   (il nome "c" NON si può usare: per Apps Script è riservato e la chiamata risponde "file non trovato")
-//   POST …/exec            → { ok: true, ricevute: [id...], scartate: [] }   riceve una o più registrazioni
+//   POST …/exec            → { ok: true, ricevute: [id...], scartate: [], problema? }   riceve una o più registrazioni
 // Ogni registrazione ha un "tipo": "nota" (va in Segnalazioni) o "richiesta" (da fare per l'ufficio, va in Richieste).
+// "ricevute" = scritte o già presenti; "scartate" = malformate (id o testo non validi), il telefono non le rimanda;
+// "problema" ("tipo", "server") = qualcosa non è stato scritto per colpa dello script: il telefono riprova più tardi.
 // Ogni richiesta porta il codice segreto dell'operatore, controllato nel foglio nascosto "Operatori".
 // Nel foglio c'è il menu "Diario Cantieri".
 
@@ -48,7 +50,7 @@ var MAX_NOTE_PER_RICHIESTA = 50;
 var MAX_LUNGHEZZA_TESTO = 20000;
 var MAX_LUNGHEZZA_CANTIERE = 100;
 var RIGHE_CASELLE = 200;      // righe con la casella "attivo" pronta in Cantieri e Operatori
-var VERSIONE_SCRIPT = 5;      // compare nelle risposte: serve a capire quale versione è pubblicata
+var VERSIONE_SCRIPT = 6;      // compare nelle risposte: serve a capire quale versione è pubblicata
 
 // ---------- Web App ----------
 
@@ -70,7 +72,9 @@ function doPost(e) {
     if (!operatore) return rispostaJson({ ok: false, errore: 'codice' });
     if (!Array.isArray(dati.note)) return rispostaJson({ ok: false, errore: 'richiesta' });
     var esito = aggiungiRegistrazioni(operatore, dati.note.slice(0, MAX_NOTE_PER_RICHIESTA));
-    return rispostaJson({ ok: true, ricevute: esito.ricevute, scartate: esito.scartate });
+    var risposta = { ok: true, ricevute: esito.ricevute, scartate: esito.scartate };
+    if (esito.problema) risposta.problema = esito.problema;
+    return rispostaJson(risposta);
   } catch (errore) {
     console.error('doPost: ' + errore);
     return rispostaJson({ ok: false, errore: 'server' });
@@ -148,6 +152,7 @@ function leggiConfig(chiave) {
 function aggiungiRegistrazioni(operatore, note) {
   var ricevute = [];
   var scartate = [];
+  var problemi = [];      // cosa non si è riusciti a scrivere, senza che la colpa sia della registrazione
   var perTipo = {};
   note.forEach(function (nota) {
     var pulita = pulisciNota(nota);
@@ -155,19 +160,33 @@ function aggiungiRegistrazioni(operatore, note) {
       if (nota && nota.id) scartate.push(String(nota.id));
       return;
     }
-    ricevute.push(pulita.idOriginale);
-    if (!perTipo[pulita.tipo]) perTipo[pulita.tipo] = [];
+    // Tipo che questo script non conosce (app più nuova dello script, o un modulo futuro): non si
+    // scarta e non si conferma, così il telefono la tiene in attesa e la rimanda più avanti.
+    // hasOwnProperty: "constructor" o "__proto__" non devono passare per tipi veri.
+    if (!Object.prototype.hasOwnProperty.call(TIPI, pulita.tipo)) {
+      if (problemi.indexOf('tipo') < 0) problemi.push('tipo');
+      return;
+    }
+    if (!Object.prototype.hasOwnProperty.call(perTipo, pulita.tipo)) perTipo[pulita.tipo] = [];
     perTipo[pulita.tipo].push(pulita);
   });
 
   var adesso = new Date();
   var cantieriNuovi = [];
   Object.keys(perTipo).forEach(function (tipo) {
-    var scritte = scriviRegistrazioni(tipo, perTipo[tipo], operatore, adesso);
-    if (tipo === 'nota') {
-      scritte.forEach(function (nota) {
-        if (cantieriNuovi.indexOf(nota.cantiere) < 0) cantieriNuovi.push(nota.cantiere);
-      });
+    // Un errore su un tipo non deve bloccare gli altri: quelle scritte vengono confermate,
+    // le altre restano in attesa sul telefono e l'errore finisce nel registro dello script.
+    try {
+      var scritte = scriviRegistrazioni(tipo, perTipo[tipo], operatore, adesso);
+      perTipo[tipo].forEach(function (registrazione) { ricevute.push(registrazione.idOriginale); });
+      if (tipo === 'nota') {
+        scritte.forEach(function (nota) {
+          if (cantieriNuovi.indexOf(nota.cantiere) < 0) cantieriNuovi.push(nota.cantiere);
+        });
+      }
+    } catch (errore) {
+      console.error('scrittura "' + tipo + '": ' + errore);
+      if (problemi.indexOf('server') < 0) problemi.push('server');
     }
   });
 
@@ -178,25 +197,42 @@ function aggiungiRegistrazioni(operatore, note) {
   } catch (errore) {
     console.error('fogli per cantiere: ' + errore);
   }
-  return { ricevute: ricevute, scartate: scartate };
+  return { ricevute: ricevute, scartate: scartate, problema: problemi.join(',') };
 }
 
-// Scrive le registrazioni di un tipo nel suo foglio, saltando gli id già presenti.
+// Scrive le registrazioni di un tipo nel suo foglio, saltando gli id già presenti in qualsiasi foglio
+// delle registrazioni (tranne "ignoraFoglio": lo usa "Sposta la riga" per il foglio di partenza).
 // Restituisce quelle scritte davvero. Un solo invio alla volta scrive sul foglio.
-function scriviRegistrazioni(tipo, registrazioni, operatore, adesso) {
+function scriviRegistrazioni(tipo, registrazioni, operatore, adesso, ignoraFoglio) {
   var def = TIPI[tipo];
-  var f = foglio(def.foglio);
-  if (!f) throw new Error('Manca il foglio "' + def.foglio + '": usa "Prepara il foglio"');
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Se il foglio manca (script aggiornato senza rilanciare "Prepara il foglio") nasce qui con la sola
+  // intestazione; formati e tendine arrivano al prossimo "Prepara il foglio". Meglio di un errore
+  // che bloccherebbe tutti gli invii del telefono.
+  var f = ss.getSheetByName(def.foglio) || assicuraFoglio(ss, def.foglio);
   var cols = COLONNE[def.foglio];
   var scritte = [];
 
   var blocco = LockService.getScriptLock();
   blocco.waitLock(30000);
   try {
-    // Una sola lettura della colonna id: serve per i doppioni e per trovare dove scrivere.
-    var ids = colonnaId(f);
+    // Gli id già presenti si cercano in tutti i fogli delle registrazioni: una riga che l'ufficio
+    // ha spostato nell'altro foglio non deve rinascere qui se il telefono la rimanda.
     var esistenti = {};
-    ids.forEach(function (id) { if (id) esistenti[id.toLowerCase()] = true; });
+    Object.keys(TIPI).forEach(function (t) {
+      var nomeFoglio = TIPI[t].foglio;
+      if (nomeFoglio === def.foglio || nomeFoglio === ignoraFoglio) return;
+      var altro = ss.getSheetByName(nomeFoglio);
+      if (altro) colonnaId(altro).forEach(function (id) { if (id) esistenti[id.toLowerCase()] = true; });
+    });
+    // Nel foglio di destinazione una sola lettura dà sia gli id (doppioni) sia le righe occupate.
+    // Una riga conta come occupata anche se ha solo il testo: l'ufficio può aver scritto a mano
+    // un promemoria senza id, e non va coperto.
+    var occupate = righeDati(f, Math.max(cols.id, cols[def.colonnaTesto])).map(function (riga) {
+      var id = String(riga[cols.id - 1]).trim();
+      if (id) esistenti[id.toLowerCase()] = true;
+      return id || String(riga[cols[def.colonnaTesto] - 1]).trim();
+    });
 
     var righe = [];
     registrazioni.forEach(function (registrazione) {
@@ -215,7 +251,7 @@ function scriviRegistrazioni(tipo, registrazioni, operatore, adesso) {
     });
 
     if (righe.length) {
-      var prima = primaRigaLiberaPer(ids, righe.length);
+      var prima = primaRigaLiberaPer(occupate, righe.length);
       f.getRange(prima, 1, righe.length, righe[0].length).setValues(righe);
       f.getRange(prima, cols[def.colonnaCasella], righe.length, 1).insertCheckboxes();
       SpreadsheetApp.flush();
@@ -226,24 +262,30 @@ function scriviRegistrazioni(tipo, registrazioni, operatore, adesso) {
   return scritte;
 }
 
-// Colonna degli id dalla riga 2 all'ultima riga usata (compresi i vuoti).
-function colonnaId(f) {
+// Righe di dati (dalla 2 all'ultima usata), limitate alle prime "colonne" colonne.
+function righeDati(f, colonne) {
   var ultima = f.getLastRow();
   if (ultima < 2) return [];
-  return f.getRange(2, 1, ultima - 1, 1).getValues().map(function (riga) { return String(riga[0]).trim(); });
+  return f.getRange(2, 1, ultima - 1, colonne).getValues();
 }
 
-// Prima riga da cui ci sono "quante" righe libere di seguito; se non c'è un buco così grande,
-// la riga dopo l'ultima. Serve perché le caselle di spunta trascinate giù dall'ufficio
-// contano come righe piene per getLastRow(): le note non devono finire sotto righe vuote.
-function primaRigaLiberaPer(ids, quante) {
+// Colonna degli id dalla riga 2 all'ultima riga usata (compresi i vuoti).
+function colonnaId(f) {
+  return righeDati(f, 1).map(function (riga) { return String(riga[0]).trim(); });
+}
+
+// "occupate" ha un elemento per riga di dati: vuoto se la riga è libera. Restituisce la prima riga
+// da cui ci sono "quante" righe libere di seguito; se non c'è un buco così grande, la riga dopo
+// l'ultima. Serve perché le caselle di spunta trascinate giù dall'ufficio contano come righe piene
+// per getLastRow(): le note non devono finire sotto righe vuote.
+function primaRigaLiberaPer(occupate, quante) {
   var inizio = -1;
-  for (var i = 0; i < ids.length; i++) {
-    if (ids[i]) { inizio = -1; continue; }
+  for (var i = 0; i < occupate.length; i++) {
+    if (occupate[i]) { inizio = -1; continue; }
     if (inizio < 0) inizio = i;
     if (i - inizio + 1 >= quante) return inizio + 2;
   }
-  return (inizio >= 0 ? inizio : ids.length) + 2;
+  return (inizio >= 0 ? inizio : occupate.length) + 2;
 }
 
 // Controlla e ripulisce una registrazione arrivata dal telefono; null se non è utilizzabile.
@@ -252,8 +294,8 @@ function pulisciNota(nota) {
   var idOriginale = String(nota.id || '').trim();
   var id = idOriginale.toLowerCase();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) return null;
-  var tipo = String(nota.tipo || 'nota').trim().toLowerCase();
-  if (!TIPI[tipo]) return null;
+  // Il tipo si controlla dopo, in aggiungiRegistrazioni: uno sconosciuto non va scartato ma lasciato in attesa.
+  var tipo = String(nota.tipo || 'nota').trim().toLowerCase().slice(0, 40);
   var testo = String(nota.testo || '').trim();
   if (!testo) return null;
   if (testo.length > MAX_LUNGHEZZA_TESTO) testo = testo.slice(0, MAX_LUNGHEZZA_TESTO);
@@ -376,11 +418,22 @@ function onEdit(e) {
     } else if (nome === NOME_RICHIESTE) {
       var cols = COLONNE[NOME_RICHIESTE];
       if (primaCol > cols.accettata_da || ultimaCol < cols.accettata_da) return;
-      for (var riga = e.range.getRow(); riga < e.range.getRow() + e.range.getNumRows(); riga++) {
-        if (riga < 2) continue;
-        var chi = String(f.getRange(riga, cols.accettata_da).getValue()).trim();
-        f.getRange(riga, cols.data_accettazione).setValue(chi ? new Date() : '');
+      // Solo le righe di dati usate davvero: una selezione di colonna intera arriva in fondo al foglio.
+      var daRiga = Math.max(e.range.getRow(), 2);
+      var aRiga = Math.min(e.range.getLastRow(), f.getLastRow());
+      if (aRiga < daRiga) return;
+      var nomi = f.getRange(daRiga, cols.accettata_da, aRiga - daRiga + 1, 1).getValues();
+      var celleData = f.getRange(daRiga, cols.data_accettazione, aRiga - daRiga + 1, 1);
+      var date = celleData.getValues();
+      var cambiate = false;
+      for (var i = 0; i < nomi.length; i++) {
+        var chi = String(nomi[i][0]).trim();
+        // La data si scrive solo la prima volta che compare un nome (correggere un refuso non la
+        // cambia) e si toglie solo quando il nome sparisce.
+        if (chi && !date[i][0]) { date[i][0] = new Date(); cambiate = true; }
+        else if (!chi && date[i][0]) { date[i][0] = ''; cambiate = true; }
       }
+      if (cambiate) celleData.setValues(date);
     }
   } catch (errore) {
     console.error('onEdit: ' + errore);
@@ -571,7 +624,9 @@ function spostaRiga(daTipo, aTipo) {
     ui.alert('La riga ' + riga + ' è vuota.');
     return;
   }
-  var conferma = ui.alert('Sposto in "' + aFoglio + '" la riga ' + riga + '?\n\n' + testo.slice(0, 200), ui.ButtonSet.YES_NO);
+  var conferma = ui.alert('Sposto in "' + aFoglio + '" la riga ' + riga + '?\n\n' + testo.slice(0, 200)
+    + '\n\nPassano id, date, operatore, cantiere e testo. Quello che ha compilato l\'ufficio (spunte, nomi, note) non viene copiato.',
+    ui.ButtonSet.YES_NO);
   if (conferma !== ui.Button.YES) return;
 
   var data = valori[cols[TIPI[daTipo].colonnaData] - 1];
@@ -582,12 +637,44 @@ function spostaRiga(daTipo, aTipo) {
     tipo: aTipo,
     testo: testo,
     cantiere: String(valori[cols.cantiere - 1]).trim() || GENERALE,
-    dataOraNota: data instanceof Date ? data : new Date()
+    // Una data scritta come testo resta com'è: meglio di una data inventata adesso.
+    dataOraNota: data || new Date()
   };
-  scriviRegistrazioni(aTipo, [registrazione], String(valori[cols.operatore - 1]).trim(), ricezione instanceof Date ? ricezione : new Date());
-  f.deleteRow(riga);
+  // Il foglio di partenza non conta per i doppioni: l'id è ancora lì proprio perché lo stiamo spostando.
+  var scritte = scriviRegistrazioni(aTipo, [registrazione], String(valori[cols.operatore - 1]).trim(), ricezione || new Date(), daFoglio);
+  if (!scritte.length) {
+    ui.alert('In "' + aFoglio + '" c\'è già una riga con lo stesso id: non ho spostato niente. Controlla le due righe e cancella a mano quella di troppo.');
+    return;
+  }
+  // La riga di partenza si ritrova per id proprio adesso: mentre la finestra era aperta un collega
+  // può aver inserito o tolto righe, e il numero letto all'inizio non vale più.
+  var trovata = 0;
+  var blocco = LockService.getScriptLock();
+  blocco.waitLock(30000);
+  try {
+    trovata = rigaConId(f, cols.id, id);
+    if (trovata) f.deleteRow(trovata);
+  } finally {
+    blocco.releaseLock();
+  }
   if (aTipo === 'nota') assicuraFogliPerCantieri([registrazione.cantiere]);
+  if (!trovata) {
+    ui.alert('La copia è in "' + aFoglio + '", ma la riga di partenza non si trova più in "' + daFoglio + '": controlla che non sia rimasta.');
+    return;
+  }
   ss.getSheetByName(aFoglio).activate();
+}
+
+// Numero della prima riga di dati con quell'id nella colonna indicata; 0 se non c'è.
+function rigaConId(f, colonna, id) {
+  var cercato = String(id).trim().toLowerCase();
+  var ultima = f.getLastRow();
+  if (ultima < 2) return 0;
+  var valori = f.getRange(2, colonna, ultima - 1, 1).getValues();
+  for (var i = 0; i < valori.length; i++) {
+    if (String(valori[i][0]).trim().toLowerCase() === cercato) return i + 2;
+  }
+  return 0;
 }
 
 // ---------- Operatori ----------

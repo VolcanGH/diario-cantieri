@@ -67,14 +67,24 @@
         };
         risolvi(db);
       };
-      richiesta.onerror = function () { connessione = null; rifiuta(richiesta.error); };
+      richiesta.onerror = function () {
+        connessione = null;
+        var errore = richiesta.error;
+        // La memoria è già a una versione più nuova di questo codice: succede quando il service worker
+        // nuovo l'ha aggiornata mentre la pagina era ancora quella vecchia. Da qui non si può più aprire:
+        // la pagina si ricarica appena può (vedi app.js), altrimenti ogni lettura fallirebbe per sempre.
+        if (errore && errore.name === 'VersionError' && globale.Archivio && globale.Archivio.allaVersioneNuova) {
+          try { globale.Archivio.allaVersioneNuova(); } catch (e) { /* non indispensabile */ }
+        }
+        rifiuta(errore);
+      };
     });
     return connessione;
   }
 
   function nuovaTransazione(db, modo, sicura) {
     if (!sicura) return db.transaction(DEPOSITI, modo);
-    // "strict" = la scrittura è confermata solo quando è arrivata sul disco: si usa per le note.
+    // "strict" = la scrittura è confermata solo quando è arrivata sul disco: si usa per note e appuntamenti.
     try { return db.transaction(DEPOSITI, 'readwrite', { durability: 'strict' }); }
     catch (errore) {
       if (errore.name === 'InvalidStateError') throw errore;
@@ -276,7 +286,13 @@
         return segnaEsito(risposta.ricevute || [], 'inviata')
           .then(function () { return segnaEsito(risposta.scartate || [], 'scartata'); })
           .then(sfoltisci)
-          .then(function () { return scriviPiu({ problemaCodice: false, ultimoErroreInvio: 0 }); })
+          .then(function () {
+            // Il foglio ha confermato quello che ha potuto, ma qualcosa non è andato (un tipo che lo
+            // script non conosce ancora, un foglio che non si riesce a scrivere): le registrazioni
+            // rimaste restano in attesa e si riprova più tardi, come dopo un guasto del foglio.
+            if (risposta.problema) throw new ErroreFoglio('Risposta: ' + risposta.problema);
+            return scriviPiu({ problemaCodice: false, ultimoErroreInvio: 0 });
+          })
           .then(function () {
             if (note.length > blocco.length) return inviaVero();
           });
@@ -345,6 +361,8 @@
     contaInAttesa: contaInAttesa,
     leggi: leggi,
     scrivi: scrivi,
+    // La pagina mette qui una funzione da chiamare se la memoria risulta già a una versione più nuova.
+    allaVersioneNuova: null,
     appuntamentiDelGiorno: appuntamentiDelGiorno,
     salvaAppuntamento: salvaAppuntamento,
     eliminaAppuntamento: eliminaAppuntamento

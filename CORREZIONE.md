@@ -95,7 +95,7 @@ Nei fogli per cantiere, accanto all'originale (colonna `testo_corretto`), e nell
 Non fa parte della correzione, ma lo fa la stessa routine, leggendo lo stesso foglio:
 
 - Quando in `Richieste` una riga ha `accettata_da` e `data_accettazione`, crea un evento sul calendario Google di Mirko: inizio a `data_accettazione` + 24 ore arrotondato all'ora intera più vicina, durata 30 minuti, promemoria all'inizio.
-- Titolo: `<cantiere> – <richiesta_corretta>`. Descrizione: chi ha fatto la richiesta, chi l'ha accettata e quando, testo originale, `id richiesta: <id>`.
+- Titolo: `<cantiere> – <richiesta_corretta>` (se `richiesta_corretta` è vuota usa `richiesta`; nello stesso giro la correzione gira prima degli eventi, quindi di norma il testo corretto c'è già). Descrizione: chi ha fatto la richiesta, chi l'ha accettata e quando, testo originale, `id richiesta: <id>`.
 - Colore per persona: Mirko rosso, Monica blu, Gabriele verde, Mattia giallo, Stefano grigio; un nome fuori tabella prende il colore predefinito.
 - Niente doppioni: prima di creare cerca l'`id` della richiesta nel calendario. Non modifica né cancella eventi già creati. Nel foglio non scrive niente.
 - Le accettazioni precedenti all'11/10/2026 19:53 (prove) vengono ignorate.

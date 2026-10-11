@@ -53,7 +53,7 @@ Tutto si fa nel foglio Google **"Diario Cantieri"** (nel Drive dell'account Goog
 ### Le impostazioni in `Config`
 
 - `url_app`: l'indirizzo dell'app sul telefono. Serve per costruire i link degli operatori. Non cambiarlo.
-- `correzione_attiva`: per la correzione automatica del testo (non ancora costruita, vedi la sezione 3). Lascia la spunta vuota.
+- `correzione_attiva`: interruttore del correttore esterno dei testi (vedi `CORREZIONE.md`). Spuntala quando il correttore è in funzione; togli la spunta per fermarlo.
 
 ---
 
@@ -92,6 +92,7 @@ Da sapere:
 - **`prove/server-finto.js`** — un server locale per provare l'app sul computer senza toccare Google: `node prove/server-finto.js`, poi apri `http://localhost:8765/app/?c=PROVAPROVAPROVA1` (il codice operatore di prova). Il finto backend sta su `http://localhost:8766/exec` e risponde anche a `/stato` (note ricevute), `/azzera` (svuota) e `/guasto/on` · `/guasto/off` (simula un foglio guasto).
 - **`app/icons/icona.svg`** — il disegno dell'icona; i PNG a 192 e 512 px sono ricavati da lì.
 - **`CLAUDE.md`** — la specifica originale dell'app.
+- **`CORREZIONE.md`** — il contratto per il correttore esterno dei testi: quali righe, quali colonne, come scrivere, regole di correzione.
 
 Il dialogo telefono ↔ foglio è tutto qui:
 
@@ -136,6 +137,6 @@ Due regole quando cambiano insieme app e script: **prima lo script, poi l'app** 
 
 ### Cosa manca (e come si farebbe)
 
-**Correzione automatica del testo** (la "tappa 6" della specifica): un file `Correzione.gs` con un trigger a tempo ogni 5 minuti che legge le righe di `Segnalazioni` con `stato_correzione` vuoto, chiama l'API di Claude (modello economico), scrive `testo_corretto` e `stato_correzione = "fatto"` (oppure `"errore"`, con 3 tentativi al massimo). Prima di costruirla servono: una chiave API Anthropic (console.anthropic.com, a consumo) da salvare nelle *Proprietà dello script* (mai nel codice), la spunta `correzione_attiva` in `Config`, e lo scope `script.external_request` nel manifest. Il prompt è già scritto nella specifica (`CLAUDE.md`): correggere ortografia e punteggiatura senza cambiare il significato.
+**Correzione dei testi** (la "tappa 6" della specifica): non sta nello script del foglio ma in un correttore esterno, un programma o un agente su un server dell'ufficio con accesso al foglio via API Google (il foglio va condiviso con il suo account come Editor). Il foglio è già pronto: colonne `testo_corretto` e `stato_correzione` in `Segnalazioni`, `richiesta_corretta` e `stato_correzione` in `Richieste`, tendina degli stati (`fatto`, `errore`, `no`), interruttore `correzione_attiva` in `Config`. Tutto quello che il correttore deve sapere, regole di correzione comprese, è in **`CORREZIONE.md`**: basta darglielo. Se un giorno la si volesse dentro lo script, servirebbero una chiave API nelle *Proprietà dello script*, lo scope `script.external_request` nel manifest e un trigger a tempo.
 
 **Idee di fase 2** (nella specifica): pulsante "È urgente" con email all'ufficio, riepilogo giornaliero via email, suggerimento del cantiere dal GPS, più operatori con link separati (già possibile dal menu).

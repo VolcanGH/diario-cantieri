@@ -25,8 +25,10 @@ var INTESTAZIONI = {};
 INTESTAZIONI[NOME_CANTIERI] = ['nome', 'attivo', 'note'];
 INTESTAZIONI[NOME_SEGNALAZIONI] = ['id', 'data_ora_nota', 'data_ora_ricezione', 'operatore', 'cantiere',
   'testo_originale', 'testo_corretto', 'stato_correzione', 'letto'];
+// Le colonne nuove si aggiungono SOLO in fondo: "Prepara il foglio" riscrive la riga delle intestazioni
+// ma non sposta i dati, quindi una colonna inserita in mezzo disallineerebbe le righe esistenti.
 INTESTAZIONI[NOME_RICHIESTE] = ['id', 'data_ora_richiesta', 'data_ora_ricezione', 'operatore', 'cantiere',
-  'richiesta', 'accettata_da', 'data_accettazione', 'fatto', 'note_ufficio'];
+  'richiesta', 'accettata_da', 'data_accettazione', 'fatto', 'note_ufficio', 'richiesta_corretta', 'stato_correzione'];
 INTESTAZIONI[NOME_PERSONE] = ['nome'];
 INTESTAZIONI[NOME_OPERATORI] = ['codice', 'nome', 'attivo'];
 INTESTAZIONI[NOME_CONFIG] = ['chiave', 'valore', 'note'];
@@ -50,7 +52,7 @@ var MAX_NOTE_PER_RICHIESTA = 50;
 var MAX_LUNGHEZZA_TESTO = 20000;
 var MAX_LUNGHEZZA_CANTIERE = 100;
 var RIGHE_CASELLE = 200;      // righe con la casella "attivo" pronta in Cantieri e Operatori
-var VERSIONE_SCRIPT = 6;      // compare nelle risposte: serve a capire quale versione è pubblicata
+var VERSIONE_SCRIPT = 7;      // compare nelle risposte: serve a capire quale versione è pubblicata
 
 // ---------- Web App ----------
 
@@ -484,6 +486,13 @@ function preparaFoglio() {
   segnalazioni.getRange(lettera(COL.operatore) + '2:' + lettera(COL.stato_correzione)).setNumberFormat('@');
   segnalazioni.getRange(lettera(COL.testo_originale) + '2:' + lettera(COL.testo_corretto)).setWrap(true);
   segnalazioni.getRange(s('cantiere')).setDataValidation(tendinaCantieri);
+  // Stato della correzione dei testi, fatta da un correttore esterno (vedi CORREZIONE.md):
+  // vuoto = da correggere, "fatto", "errore" (si riprova), "no" (non correggere).
+  var tendinaCorrezione = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['fatto', 'errore', 'no'], true)
+    .setAllowInvalid(true)
+    .build();
+  segnalazioni.getRange(s('stato_correzione')).setDataValidation(tendinaCorrezione);
   [60, 130, 130, 110, 200, 420, 420, 110, 60].forEach(function (larghezza, i) {
     segnalazioni.setColumnWidth(i + 1, larghezza);
   });
@@ -501,18 +510,21 @@ function preparaFoglio() {
   richieste.getRange(r('id')).setNumberFormat('@');
   richieste.getRange(lettera(cr.data_ora_richiesta) + '2:' + lettera(cr.data_ora_ricezione)).setNumberFormat('dd/mm/yyyy hh:mm');
   richieste.getRange(r('data_accettazione')).setNumberFormat('dd/mm/yyyy hh:mm');
-  [cr.operatore, cr.cantiere, cr.richiesta, cr.accettata_da, cr.note_ufficio].forEach(function (colonna) {
-    richieste.getRange(lettera(colonna) + '2:' + lettera(colonna)).setNumberFormat('@');
-  });
+  [cr.operatore, cr.cantiere, cr.richiesta, cr.accettata_da, cr.note_ufficio, cr.richiesta_corretta, cr.stato_correzione]
+    .forEach(function (colonna) {
+      richieste.getRange(lettera(colonna) + '2:' + lettera(colonna)).setNumberFormat('@');
+    });
   richieste.getRange(r('richiesta')).setWrap(true);
   richieste.getRange(r('note_ufficio')).setWrap(true);
+  richieste.getRange(r('richiesta_corretta')).setWrap(true);
   richieste.getRange(r('cantiere')).setDataValidation(tendinaCantieri);
+  richieste.getRange(r('stato_correzione')).setDataValidation(tendinaCorrezione);
   // Chi accetta sceglie il proprio nome dalla tendina (si può anche scrivere a mano).
   richieste.getRange(r('accettata_da')).setDataValidation(SpreadsheetApp.newDataValidation()
     .requireValueInRange(persone.getRange('A2:A'), true)
     .setAllowInvalid(true)
     .build());
-  [60, 130, 130, 110, 200, 420, 150, 130, 60, 300].forEach(function (larghezza, i) {
+  [60, 130, 130, 110, 200, 420, 150, 130, 60, 300, 420, 110].forEach(function (larghezza, i) {
     richieste.setColumnWidth(i + 1, larghezza);
   });
 
@@ -522,7 +534,7 @@ function preparaFoglio() {
   operatori.hideSheet();
 
   var config = assicuraFoglio(ss, NOME_CONFIG);
-  assicuraConfig(config, 'correzione_attiva', false, 'Correzione automatica del testo: spunta per attivarla (serve il codice della tappa 6)');
+  assicuraConfig(config, 'correzione_attiva', false, 'Correzione dei testi fatta dal correttore esterno (vedi CORREZIONE.md): lui la legge prima di lavorare. Spunta per attivarla, togli la spunta per fermarlo.');
   assicuraConfig(config, 'url_app', 'https://volcangh.github.io/diario-cantieri/app/', 'Indirizzo dell\'app sul telefono: serve per creare i link degli operatori. Non cambiarlo.');
   config.setColumnWidth(1, 180);
   config.setColumnWidth(2, 420);

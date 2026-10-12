@@ -103,6 +103,9 @@ body {
 
 .btn-scuro { background: var(--testo); color: #FFFFFF; }
 
+/* Rosso pieno con testo bianco (7,9:1): "Torna all'inizio" nel calendario, per staccarlo dalle righe bianche. */
+.btn-rosso { border-color: var(--rosso); background: var(--rosso); color: #FFFFFF; }
+
 /* Risposta visibile al tocco: su un telefono non c'è il passaggio del mouse. */
 .btn:active { transform: translateY(1px); box-shadow: none; filter: brightness(0.9); }
 

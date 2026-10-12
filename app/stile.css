@@ -339,7 +339,10 @@ body {
 /* In alto: freccia, giorno su due righe, freccia. Le frecce sono quadrate, 56px. */
 .giorno-barra { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
 
-.btn-freccia { flex: 0 0 56px; width: 56px; min-height: 56px; padding: 0 0 5px; font-size: 1.8rem; line-height: 1; }
+/* Frecce gialle con il tratto spesso: devono vedersi anche al sole. */
+.btn-freccia { flex: 0 0 56px; width: 56px; min-height: 56px; padding: 0; }
+
+.icona-freccia { width: 1.8rem; height: 1.8rem; }
 
 .giorno-titolo { flex: 1 1 auto; min-width: 0; font-size: 1.05rem; line-height: 1.2; text-align: center; }
 

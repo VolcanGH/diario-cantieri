@@ -81,9 +81,17 @@
   <section id="schermo-calendario" class="schermo schermo-calendario" aria-label="Calendario">
     <!-- In alto: freccia "giorno prima", il giorno su due righe, freccia "giorno dopo". -->
     <div class="giorno-barra">
-      <button id="btn-giorno-prima" class="btn btn-freccia" type="button" aria-label="Giorno prima">‹</button>
+      <button id="btn-giorno-prima" class="btn btn-principale btn-freccia" type="button" aria-label="Giorno prima">
+        <svg class="icona icona-freccia" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
       <h1 id="giorno-titolo" class="titolo giorno-titolo"><span id="giorno-nome">Oggi</span><br><span id="giorno-data"></span></h1>
-      <button id="btn-giorno-dopo" class="btn btn-freccia" type="button" aria-label="Giorno dopo">›</button>
+      <button id="btn-giorno-dopo" class="btn btn-principale btn-freccia" type="button" aria-label="Giorno dopo">
+        <svg class="icona icona-freccia" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
     </div>
     <p id="calendario-avviso" class="avviso" role="alert" hidden>Non riesco a leggere gli appuntamenti. Chiudi e riapri l'app.</p>
     <!-- Una riga per ogni ora dalle 7 alle 19, tutte in vista; il tocco apre "Racconta" per quella casella. -->

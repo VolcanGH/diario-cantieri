@@ -298,18 +298,26 @@ body {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   min-height: 0;
   padding-bottom: 4px;
+  /* Scorre solo quando i cantieri sono davvero tanti e le righe sono già al minimo. */
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
-/* I cantieri sono scelte alla pari: bianchi, con una barra gialla come segno. */
+/* I cantieri sono scelte alla pari: bianchi, con una barra gialla come segno.
+   Si dividono lo spazio: con pochi cantieri restano alti (fino a 80px), con tanti
+   si stringono fino a 48px, così ce ne stanno circa dieci senza scorrere. */
 .btn-cantiere {
+  flex: 1 1 0;
+  min-height: 48px;
+  max-height: 80px;
   justify-content: flex-start;
-  padding-left: 18px;
+  padding: 4px 14px 4px 16px;
   border-left: 8px solid var(--giallo);
+  font-size: 1.15rem;
+  line-height: 1.15;
   text-align: left;
 }
 

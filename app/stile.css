@@ -310,14 +310,13 @@ body {
    Si dividono lo spazio: con pochi cantieri restano alti (fino a 80px), con tanti
    si stringono fino a 48px, così ce ne stanno circa dieci senza scorrere. */
 .btn-cantiere {
-  flex: 1 1 0;
-  min-height: 48px;
-  max-height: 80px;
+  flex: 0 1 80px;        /* alti 80px se c'è posto; se i cantieri sono tanti si stringono… */
+  min-height: auto;      /* …ma mai sotto il proprio testo: un nome lungo non viene tagliato */
   justify-content: flex-start;
-  padding: 4px 14px 4px 16px;
+  padding: 8px 14px 8px 16px;   /* con una riga di testo fanno 49px: il minimo toccabile */
   border-left: 8px solid var(--giallo);
   font-size: 1.15rem;
-  line-height: 1.15;
+  line-height: 1.2;
   text-align: left;
 }
 

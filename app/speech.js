@@ -11,6 +11,10 @@
   'use strict';
 
   var Riconoscimento = globale.SpeechRecognition || globale.webkitSpeechRecognition;
+  // Modalità continua: Android tiene aperto il microfono attraverso le pause brevi e chiude solo dopo
+  // silenzi più lunghi, quindi riapre meno volte e perde meno parole. In cambio dopo una pausa può
+  // ripetere il testo già detto: "accoda" qui sotto scarta i doppioni. Se desse problemi: false.
+  var CONTINUO = true;
   var MILLISECONDI_SILENZIO_MASSIMO = 2 * 60 * 1000;   // senza una parola per due minuti si chiude da solo
   var MILLISECONDI_ASCOLTO_MASSIMO = 10 * 60 * 1000;   // e comunque mai oltre dieci minuti
   var MILLISECONDI_CHIUSURA_FORZATA = 4000;            // se dopo "ferma" la fine non arriva, si chiude a forza
@@ -26,6 +30,20 @@
   function unisciPezzi(a, b) { return (a + ' ' + b).replace(/\s+/g, ' ').trim(); }
 
   function testoDi(s) { return unisciPezzi(s.precedente, s.corrente); }
+
+  // Accoda un pezzo di trascrizione scartando i doppioni della modalità continua di Android:
+  // dopo una pausa il pezzo nuovo può ripartire con tutto il testo già detto, o essere una
+  // ripetizione esatta di quello appena arrivato.
+  function accoda(acc, pezzo) {
+    pezzo = String(pezzo || '').replace(/\s+/g, ' ').trim();
+    if (!pezzo) return acc;
+    if (!acc) return pezzo;
+    var a = acc.toLowerCase();
+    var p = pezzo.toLowerCase();
+    if (p.indexOf(a) === 0) return pezzo;              // il pezzo nuovo contiene già tutto il precedente
+    if (a.slice(-p.length) === p) return acc;          // ripetizione esatta della coda
+    return acc + ' ' + pezzo;
+  }
 
   // opzioni: alTesto(testo) mentre parla, allaFine(testo) quando ha finito,
   //          allErrore(codice, testo) se qualcosa è andato storto (il testo capito fin lì resta).
@@ -55,7 +73,7 @@
   function apriSpezzone(s) {
     var r = new Riconoscimento();
     r.lang = 'it-IT';
-    r.continuous = false;       // la modalità continua su Android duplica il testo (bug noto)
+    r.continuous = CONTINUO;
     r.interimResults = true;    // mostra le parole man mano che le capisce
     r.maxAlternatives = 1;
 
@@ -67,9 +85,9 @@
     r.onresult = function (evento) {
       // Il testo dello spezzone si ricostruisce ogni volta da tutti i risultati,
       // così non importa quante volte e in che forma arriva l'evento.
-      var pezzi = [];
-      for (var i = 0; i < evento.results.length; i++) pezzi.push(evento.results[i][0].transcript);
-      s.corrente = pezzi.join(' ').replace(/\s+/g, ' ').trim();
+      var testo = '';
+      for (var i = 0; i < evento.results.length; i++) testo = accoda(testo, evento.results[i][0].transcript);
+      s.corrente = testo;
       if (s.corrente) s.ultimaParola = Date.now();
       s.opzioni.alTesto(testoDi(s));
     };

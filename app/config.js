@@ -9,5 +9,5 @@ self.CONFIG = {
 
   // Numero di versione, mostrato in piccolo nella schermata iniziale.
   // Va aumentato a ogni pubblicazione.
-  VERSIONE: '18'
+  VERSIONE: '19'
 };

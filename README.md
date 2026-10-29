@@ -72,7 +72,7 @@ Da sapere:
 
 - **Non cancellare i dati di Chrome** sul telefono: sparirebbero il collegamento all'ufficio e le note non ancora inviate. In quel caso basta riaprire il link personale.
 - Le versioni nuove dell'app arrivano da sole, senza reinstallare nulla. Il numero in basso nella schermata iniziale (es. `v6`) dice quale versione gira.
-- Dopo una pausa nel parlato, Android ferma l'ascolto da solo: basta toccare di nuovo il microfono, il testo nuovo si accoda.
+- L'ascolto resta acceso anche durante le pause (Android lo chiuderebbe dopo pochi secondi di silenzio: l'app lo riapre da sola). Si ferma toccando di nuovo il microfono; da solo solo dopo due minuti senza una parola o dieci minuti in tutto.
 - Se quello che ha dettato è una cosa che **deve fare l'ufficio** (ordinare, chiamare, portare…), prima di *Avanti* tocca il pulsante **Da fare per l'ufficio**: diventa scuro con la spunta. La richiesta finisce nel foglio `Richieste` invece che tra le note, e la schermata finale dice "Richiesta salvata".
 - Mentre la tastiera è aperta (per correggere una parola) il pulsante microfono sparisce per fare spazio: chiudi la tastiera e ricompare.
 - **Calendario** (il pulsante azzurro): gli appuntamenti dell'operatore, dal lunedì al sabato, un'ora alla volta dalle 7 alle 19. Tocca un'ora → detta o scrivi → *Salva*; per cambiarla tocca di nuovo la riga, per toglierla *Cancella l'appuntamento*. Restano **solo sul telefono** (in ufficio non arriva niente) e non suonano: il promemoria è la riga sotto "Calendario" nella schermata iniziale, che dice il prossimo appuntamento di oggi.
